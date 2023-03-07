@@ -61,6 +61,11 @@ func doMake(arg2, arg3 string) error {
 			exitGracefully(errors.New("migration name is required"))
 		}
 
+		// check if there is a database connection
+		if gem.DB.DataType == "" {
+			return errors.New("you have to define a database type to create migrations")
+		}
+
 		dbType := gem.DB.DataType
 		fileName := fmt.Sprintf("%d_%s.%s", time.Now().UnixMicro(), arg3, dbType)
 

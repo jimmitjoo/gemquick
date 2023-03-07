@@ -8,6 +8,11 @@ import (
 
 func doSession() error {
 
+	// check if there is a database connection
+	if gem.DB.DataType == "" {
+		return errors.New("you have to define a database type to be able to use other session types than cookies")
+	}
+
 	dbType := gem.DB.DataType
 	if dbType == "pgx" || dbType == "postgresql" {
 		dbType = "postgres"

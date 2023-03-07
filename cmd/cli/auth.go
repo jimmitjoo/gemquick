@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,6 +9,12 @@ import (
 )
 
 func doAuth() error {
+
+	// check if there is a database connection
+	if gem.DB.DataType == "" {
+		return errors.New("you have to define a database type to be able to use authentication")
+	}
+
 	// migrations
 	dbType := gem.DB.DataType
 	fileName := fmt.Sprintf("%d_create_auth_tables", time.Now().UnixMicro())
