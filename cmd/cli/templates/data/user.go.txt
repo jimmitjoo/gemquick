@@ -11,15 +11,16 @@ import (
 )
 
 type User struct {
-	ID        int       `db:"id,omitempty"`
-	FirstName string    `db:"first_name"`
-	LastName  string    `db:"last_name"`
-	Email     string    `db:"email"`
-	Password  string    `db:"password"`
-	Active    int       `db:"user_active"`
-	CreatedAt time.Time `db:"created_at"`
-	UpdatedAt time.Time `db:"updated_at"`
-	Token     Token     `db:"-"`
+	ID             int       `db:"id,omitempty"`
+	FirstName      string    `db:"first_name"`
+	LastName       string    `db:"last_name"`
+	Email          string    `db:"email"`
+	Password       string    `db:"password"`
+	VerifyPassword string    `db:"-"`
+	Active         int       `db:"user_active"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+	Token          Token     `db:"-"`
 }
 
 func (u *User) Table() string {
@@ -29,7 +30,26 @@ func (u *User) Table() string {
 func (u *User) Validate(validator *gemquick.Validation) {
 	validator.Check(u.FirstName != "", "first_name", "this field is required")
 	validator.Check(u.LastName != "", "last_name", "this field is required")
+	validator.Check(u.Password != "", "password", "this field is required")
+	if u.Password != "" && u.VerifyPassword != "" {
+		validator.Equals(u.Password == u.VerifyPassword, "password", "verify_password")
+	}
 	validator.IsEmail("email", u.Email)
+}
+
+func (u *User) Activate(user User) error {
+	collection := upper.Collection(u.Table())
+
+	res := collection.Find(up.Cond{"id =": user.ID})
+	err := res.Update(map[string]interface{}{
+		"user_active": 1,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (u *User) All() ([]*User, error) {

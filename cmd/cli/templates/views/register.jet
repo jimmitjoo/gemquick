@@ -1,0 +1,100 @@
+{{extends "./layouts/base.jet"}}
+
+{{block browserTitle()}}
+Login
+{{end}}
+
+{{block css()}} {{end}}
+
+{{block pageContent()}}
+    <h2 class="mt-5 text-center">Register</h2>
+
+    <hr>
+
+    {{if .Flash != ""}}
+    <div class="alert alert-info text-center">
+        {{.Flash}}
+    </div>
+    {{end}}
+
+    <form method="post" action="/register"
+    name="register-form" id="register-form"
+    class="d-block need-validation"
+    autocomplete="off" novalidate="">
+
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+    <div class="mb-3">
+        <label for="first_name" class="form-label">First name</label>
+        <input type="text" name="first_name" id="first_name" class="form-control" required="" autocomplete="first_name-new">
+
+        <div class="invalid-feedback">
+            Please enter your first name.
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="last_name" class="form-label">Last name</label>
+        <input type="text" name="last_name" id="last_name" class="form-control" required="" autocomplete="last_name-new">
+
+        <div class="invalid-feedback">
+            Please enter your last name.
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" name="email" id="email" class="form-control" required="" autocomplete="email-new">
+
+        <div class="invalid-feedback">
+            Please enter a valid email address.
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input type="password" name="password" id="password" class="form-control" required="" autocomplete="password-new">
+        <div class="invalid-feedback">
+            Please enter a password.
+        </div>    
+    </div>
+
+     <div class="mb-3">
+        <label for="verify_password" class="form-label">Verify Password</label>
+        <input type="password" name="verify_password" id="verify_password" class="form-control" required="" autocomplete="password-new">
+        <div class="invalid-feedback">
+            Please verify your password.
+        </div>    
+    </div>
+
+    <hr>
+
+    <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Register</a>
+    <p class="mt-2">
+        <small><a href="/login">Login</a></small>
+    </p>
+    </form>
+
+    <div class="text-center">
+    <a class="btn btn-outline-secondary" href="/">Back</a>
+    </div>
+{{end}}
+
+{{block js()}}
+
+<script>
+function val() {
+    console.log('validating')
+    let form = document.getElementById('register-form');
+    if (form.checkValidity() === false) {
+        this.event.preventDefault();
+        this.event.stopPropagation();
+        form.classList.add('was-validated');
+        return;
+    }
+
+    form.classList.add('was-validated');
+    form.submit();
+}
+</script>
+{{end}}

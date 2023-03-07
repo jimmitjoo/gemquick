@@ -1,0 +1,21 @@
+{{define "body"}}
+    <!doctype html>
+    <html>
+
+    <head>
+        <meta name="viewport" content="width=device-width" />
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    </head>
+
+    <body>
+    <p>Welcome!</p>
+    <p>Please click below to activate your account. Note that the link expires in 60 minutes.</p>
+    
+    <p><a href="{{.Link}}">Activate Account Here</a></p>
+
+    <p>Or copy and paste the following link into your browser:</p>
+    {{.Link}}
+    </body>
+
+    </html>
+{{end}}

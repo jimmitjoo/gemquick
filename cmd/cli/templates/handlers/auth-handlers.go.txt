@@ -14,7 +14,98 @@ import (
 	"github.com/jimmitjoo/gemquick/urlsigner"
 )
 
+func (h *Handlers) UserRegister(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
+	err := h.App.Render.Page(w, r, "register", nil, nil)
+
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering register:", err)
+	}
+}
+
+func (h *Handlers) PostUserRegister(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
+	err := r.ParseForm()
+	if err != nil {
+		h.App.ErrorLog.Println("error parsing register form:", err)
+	}
+
+	emailAddress := r.Form.Get("email")
+	password := r.Form.Get("password")
+	verifyPassword := r.Form.Get("verify_password")
+	firstName := r.Form.Get("first_name")
+	lastName := r.Form.Get("last_name")
+
+	user := data.User{
+		FirstName:      firstName,
+		LastName:       lastName,
+		Email:          emailAddress,
+		Password:       password,
+		VerifyPassword: verifyPassword,
+	}
+
+	validator := h.App.Validator(nil)
+	user.Validate(validator)
+
+	if !validator.Valid() {
+		h.App.ErrorLog.Println("error validating register form:", validator.Errors)
+		h.App.Session.Put(r.Context(), "errors", validator.Errors)
+
+		http.Redirect(w, r, "/register", http.StatusSeeOther)
+		return
+	}
+
+	_, err = h.Models.Users.Create(user)
+	if err != nil {
+		h.App.ErrorLog.Println("error creating user:", err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	h.App.Session.Put(r.Context(), "flash", "You have been registered. Please check your email for an activation link.")
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (h *Handlers) sendActivationLink(user data.User) {
+	// create activation link
+	link := fmt.Sprintf("%s/activate-account?email=%s", h.App.Server.URL, user.Email)
+	sign := urlsigner.Signer{
+		Secret: []byte(h.App.EncryptionKey),
+	}
+
+	// sign the link
+	signedLink := sign.GenerateTokenFromString(link)
+
+	var data struct {
+		Link string
+	}
+	data.Link = signedLink
+
+	// send email to user with activation link
+	msg := email.Message{
+		To:       user.Email,
+		Subject:  "Welcome to " + os.Getenv("APP_NAME"),
+		Template: "welcome",
+		Data:     data,
+		From:     os.Getenv("MAIL_FROM_ADDRESS"),
+	}
+
+	h.App.Mail.Jobs <- msg
+	res := <-h.App.Mail.Results
+	if res.Error != nil {
+		h.App.ErrorLog.Println("error sending email:", res.Error)
+		return
+	}
+}
+
 func (h *Handlers) UserLogin(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
 	err := h.App.Render.Page(w, r, "login", nil, nil)
 
 	if err != nil {
@@ -23,6 +114,9 @@ func (h *Handlers) UserLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) PostUserLogin(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
 	err := r.ParseForm()
 	if err != nil {
 		w.Write([]byte(err.Error()))
@@ -38,6 +132,21 @@ func (h *Handlers) PostUserLogin(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 	}
 
+	if user == nil {
+		w.Write([]byte("Invalid email address"))
+		return
+	}
+
+	if user.Active != 1 {
+		// send activation link
+		h.sendActivationLink(*user)
+
+		h.App.Session.Put(r.Context(), "flash", "Your account is not active. Please check your email for an activation link.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	// check if the password matches
 	matches, err := user.PasswordMatches(password)
 	if err != nil {
 		w.Write([]byte("Error validating password"))
@@ -87,6 +196,43 @@ func (h *Handlers) PostUserLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (h *Handlers) ActivateUserAccount(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
+	theUrl := r.RequestURI
+	testUrl := fmt.Sprintf("%s%s", h.App.Server.URL, theUrl)
+
+	// validate the url
+	signer := urlsigner.Signer{
+		Secret: []byte(h.App.EncryptionKey),
+	}
+
+	valid := signer.VerifyToken(testUrl)
+	if !valid {
+		h.App.ErrorLog.Println("error validating url")
+		h.App.ErrorUnauthorized(w, r)
+		return
+	}
+
+	email := r.URL.Query().Get("email")
+
+	user, err := h.Models.Users.ByEmail(email)
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusNotFound)
+		return
+	}
+
+	err = user.Activate(*user)
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusInternalServerError)
+		return
+	}
+
+	h.App.Session.Put(r.Context(), "flash", "Your account has been activated. You can now log in.")
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
 func (h *Handlers) UserLogout(w http.ResponseWriter, r *http.Request) {
 
 	// delete remember me cookie if it exists
@@ -119,6 +265,8 @@ func (h *Handlers) UserLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Forgot(w http.ResponseWriter, r *http.Request) {
+	h.isAuthenticated(w, r)
+
 	err := h.App.Render.Page(w, r, "forgot", nil, nil)
 
 	if err != nil {
@@ -128,6 +276,9 @@ func (h *Handlers) Forgot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
 	err := r.ParseForm()
 	if err != nil {
 		h.App.ErrorLog.Println("error parsing forgot form:", err)
@@ -181,6 +332,9 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
 	// get the form values
 	emailAddress := r.URL.Query().Get("email")
 	theUrl := r.RequestURI
@@ -224,6 +378,9 @@ func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) PostResetPassword(w http.ResponseWriter, r *http.Request) {
+
+	h.isAuthenticated(w, r)
+
 	// parse the form
 	err := r.ParseForm()
 	if err != nil {
@@ -263,4 +420,11 @@ func (h *Handlers) PostResetPassword(w http.ResponseWriter, r *http.Request) {
 	// redirect to login page
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 
+}
+
+func (h *Handlers) isAuthenticated(w http.ResponseWriter, r *http.Request) {
+	if h.App.Session.Exists(r.Context(), "userID") {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 }

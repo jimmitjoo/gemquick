@@ -74,6 +74,16 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
+	err = copyFileFromTemplate("templates/email/welcome.html.tmpl", gem.RootPath+"/email/welcome.html.tmpl")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	err = copyFileFromTemplate("templates/email/welcome.plain.tmpl", gem.RootPath+"/email/welcome.plain.tmpl")
+	if err != nil {
+		exitGracefully(err)
+	}
+
 	err = copyFileFromTemplate("templates/email/password-reset.html.tmpl", gem.RootPath+"/email/password-reset.html.tmpl")
 	if err != nil {
 		exitGracefully(err)
@@ -85,6 +95,11 @@ func doAuth() error {
 	}
 
 	err = copyFileFromTemplate("templates/views/login.jet", gem.RootPath+"/views/login.jet")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	err = copyFileFromTemplate("templates/views/register.jet", gem.RootPath+"/views/register.jet")
 	if err != nil {
 		exitGracefully(err)
 	}

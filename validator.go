@@ -54,6 +54,12 @@ func (v *Validation) IsEmail(field, value string) {
 	}
 }
 
+func (v *Validation) Equals(eq bool, field, verified string) {
+	if !eq {
+		v.AddError(field, "This field must equal: "+verified)
+	}
+}
+
 func (v *Validation) IsInt(field, value string) {
 	_, err := strconv.Atoi(value)
 	if err != nil {
