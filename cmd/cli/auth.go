@@ -117,6 +117,35 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
+	// read models.go
+	modelsContent, err := os.ReadFile(gem.RootPath + "/data/models.go")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	// check if auth models are already added
+	if bytes.Contains(modelsContent, []byte("// authentication models - added by make auth command")) {
+		exitGracefully(errors.New("auth models are probably already added to data/models.go"))
+	} else {
+		// copy data/auth.models.txt into a variable
+		authModels, err := templateFS.ReadFile("templates/data/auth.models.txt")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		returnAuthModels, err := templateFS.ReadFile("templates/data/return.auth.models.txt")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		// find the line with 'return models' in modelsContent
+		output := bytes.Replace(modelsContent, []byte("type Models struct {"), []byte("type Models struct {\n\t"+string(authModels)+"\n"), 1)
+		output = bytes.Replace(output, []byte("return Models{"), []byte("return Models{\n\t"+string(returnAuthModels)+"\n\t"), 1)
+		if err = os.WriteFile(gem.RootPath+"/data/models.go", output, 0644); err != nil {
+			exitGracefully(err)
+		}
+	}
+
 	// read routes.go
 	routesContent, err := os.ReadFile(routesFile)
 	if err != nil {
