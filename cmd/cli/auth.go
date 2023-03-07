@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/fatih/color"
@@ -20,6 +22,7 @@ func doAuth() error {
 	fileName := fmt.Sprintf("%d_create_auth_tables", time.Now().UnixMicro())
 	upFile := gem.RootPath + "/migrations/" + fileName + ".up.sql"
 	downFile := gem.RootPath + "/migrations/" + fileName + ".down.sql"
+	routesFile := gem.RootPath + "/routes.go"
 
 	err := copyFileFromTemplate("templates/migrations/auth_tables."+dbType+".up.sql", upFile)
 	if err != nil {
@@ -111,6 +114,30 @@ func doAuth() error {
 
 	err = copyFileFromTemplate("templates/views/reset-password.jet", gem.RootPath+"/views/reset-password.jet")
 	if err != nil {
+		exitGracefully(err)
+	}
+
+	// read routes.go
+	routesContent, err := os.ReadFile(routesFile)
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	// check if auth routes are already added
+	if bytes.Contains(routesContent, []byte("// authentication routes - added by make auth command")) {
+		exitGracefully(errors.New("auth routes are probably already added to routes.go"))
+		return nil
+	}
+
+	// copy templates/auth.routes.txt into a variable
+	authRoutes, err := templateFS.ReadFile("templates/auth.routes.txt")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	// find the line with 'return route.App.Routes' in routesContent
+	output := bytes.Replace(routesContent, []byte("return route.App.Routes"), []byte(string(authRoutes)+"\n\n\treturn route.App.Routes"), 1)
+	if err = os.WriteFile(routesFile, output, 0644); err != nil {
 		exitGracefully(err)
 	}
 

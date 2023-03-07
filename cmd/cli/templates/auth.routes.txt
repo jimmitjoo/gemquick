@@ -1,0 +1,11 @@
+// authentication routes - added by make auth command
+    route.get("/login", route.Handlers.UserLogin)
+	route.post("/login", route.Handlers.PostUserLogin)
+	route.get("/register", route.Handlers.UserRegister)
+	route.post("/register", route.Handlers.PostUserRegister)
+	route.get("/activate-account", route.Handlers.ActivateUserAccount)
+	route.get("/logout", route.Handlers.UserLogout)
+	route.get("/forgot-password", route.Handlers.Forgot)
+	route.post("/forgot-password", route.Handlers.PostForgot)
+	route.get("/reset-password", route.Handlers.ResetPasswordForm)
+	route.post("/reset-password", route.Handlers.PostResetPassword)
