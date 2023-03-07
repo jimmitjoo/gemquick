@@ -1,0 +1,8 @@
+.idea
+coverage.out
+.git
+dist
+vendor
+cache/testdata
+email/testdata
+render/testdata

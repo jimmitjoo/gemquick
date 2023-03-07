@@ -1,0 +1,79 @@
+package middleware
+
+import (
+	"fmt"
+	"myapp/data"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func (m *Middleware) CheckRemember(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !m.App.Session.Exists(r.Context(), "userID") {
+			// user is not logged in
+			cookie, err := r.Cookie(fmt.Sprintf("_%s_remember", m.App.AppName))
+			if err != nil {
+				// no remember cookie
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// remember cookie exists
+			key := cookie.Value
+			var u data.User
+			if len(key) > 0 {
+				// cookie has some data, so lets validate it
+				split := strings.Split(key, "|")
+				uid, hash := split[0], split[1]
+				id, _ := strconv.Atoi(uid)
+				validHash := u.CheckForRememberToken(id, hash)
+				if !validHash {
+					// cookie is invalid, so lets delete it
+					m.deleteRememberCookie(w, r)
+					next.ServeHTTP(w, r)
+					return
+				} else {
+					user, _ := u.Find(id)
+					m.App.Session.Put(r.Context(), "userID", user.ID)
+					m.App.Session.Put(r.Context(), "remember_token", hash)
+					next.ServeHTTP(w, r)
+					return
+				}
+			} else {
+				// cookie is empty, so lets delete it
+				m.deleteRememberCookie(w, r)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+		} else {
+			// user is logged in
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func (m *Middleware) deleteRememberCookie(w http.ResponseWriter, r *http.Request) {
+	_ = m.App.Session.RenewToken(r.Context())
+
+	// delete cookie
+	newCookie := http.Cookie{
+		Name:     fmt.Sprintf("_%s_remember", m.App.AppName),
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Now().Add(-100 * time.Hour * 24),
+		HttpOnly: true,
+		Domain:   m.App.Session.Cookie.Domain,
+		MaxAge:   -1,
+		Secure:   m.App.Session.Cookie.Secure,
+		SameSite: m.App.Session.Cookie.SameSite,
+	}
+	http.SetCookie(w, &newCookie)
+
+	// log the user out
+	m.App.Session.Remove(r.Context(), "userID")
+	m.App.Session.Destroy(r.Context())
+	m.App.Session.RenewToken(r.Context())
+}
