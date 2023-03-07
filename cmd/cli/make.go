@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -77,7 +79,7 @@ func doMake(arg2, arg3 string) error {
 			exitGracefully(err)
 		}
 
-		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", downFile)
+		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".down.sql", downFile)
 		if err != nil {
 			exitGracefully(err)
 		}
@@ -108,7 +110,9 @@ func doMake(arg2, arg3 string) error {
 			exitGracefully(errors.New(fileName + " already exists."))
 		}
 
-		model = strings.ReplaceAll(model, "$MODELNAME$", strcase.ToCamel(arg3))
+		modelCamelName := strcase.ToCamel(arg3)
+		modelCamelNamePlural := pluralize.NewClient().Plural(modelCamelName)
+		model = strings.ReplaceAll(model, "$MODELNAME$", modelCamelName)
 		model = strings.ReplaceAll(model, "$TABLENAME$", tableName)
 
 		err = copyDataToFile([]byte(model), fileName)
@@ -116,7 +120,44 @@ func doMake(arg2, arg3 string) error {
 			exitGracefully(err)
 		}
 
-		color.Green("Model created: %s", fileName)
+		color.Green(modelCamelName+" created: %s", fileName)
+
+		// create a migration for the model
+		dbType := gem.DB.DataType
+		migrationFileName := fmt.Sprintf("%d_%s.%s", time.Now().UnixMicro(), "create_"+tableName+"_table", dbType)
+
+		upFile := gem.RootPath + "/migrations/" + migrationFileName + ".up.sql"
+		downFile := gem.RootPath + "/migrations/" + migrationFileName + ".down.sql"
+
+		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", upFile)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".down.sql", downFile)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		color.Green("Migrations for model %s created: %s", modelCamelName, migrationFileName)
+
+		// add model to models.go
+		modelsContent, err := os.ReadFile(gem.RootPath + "/data/models.go")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		if bytes.Contains(modelsContent, []byte(modelCamelName)) {
+			exitGracefully(errors.New(modelCamelName + " already exists in models.go"))
+		} else {
+			modelsContent = bytes.Replace(modelsContent, []byte("type Models struct {"), []byte("type Models struct {\n\t"+modelCamelNamePlural+" "+modelCamelName+"\n"), 1)
+			modelsContent = bytes.Replace(modelsContent, []byte("return Models{"), []byte("return Models{\n\t\t"+modelCamelNamePlural+": "+modelCamelName+"{},\n"), 1)
+			if err = os.WriteFile(gem.RootPath+"/data/models.go", modelsContent, 0644); err != nil {
+				exitGracefully(err)
+			}
+
+			color.Green(modelCamelName + " added to models.go")
+		}
 
 	case "session":
 		err := doSession()
