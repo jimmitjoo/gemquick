@@ -4,9 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"myapp/data"
 	"net/http"
 	"os"
+	"myapp/data"
 	"time"
 
 	"github.com/CloudyKit/jet/v6"
@@ -65,6 +65,8 @@ func (h *Handlers) PostUserRegister(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+
+	h.sendActivationLink(user)
 
 	h.App.Session.Put(r.Context(), "flash", "You have been registered. Please check your email for an activation link.")
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -127,13 +129,34 @@ func (h *Handlers) PostUserLogin(w http.ResponseWriter, r *http.Request) {
 	emailAddress := r.Form.Get("email")
 	password := r.Form.Get("password")
 
+	// check if email is empty
+	if emailAddress == "" {
+		// put error message in session and redirect back
+		h.App.Session.Put(r.Context(), "error", "Email address is required")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	// check if password is empty
+	if password == "" {
+		// put error message in session and redirect back
+		h.App.Session.Put(r.Context(), "error", "Password is required")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
 	user, err := h.Models.Users.ByEmail(emailAddress)
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		h.App.Session.Put(r.Context(), "error", "These credentials do not match our records.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		// w.Write([]byte(err.Error()))
+		return
 	}
 
 	if user == nil {
-		w.Write([]byte("Invalid email address"))
+		// w.Write([]byte("Invalid email address"))
+		h.App.Session.Put(r.Context(), "error", "These credentials do not match our records.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -153,7 +176,8 @@ func (h *Handlers) PostUserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !matches {
-		w.Write([]byte("Invalid password"))
+		h.App.Session.Put(r.Context(), "error", "These credentials do not match our records.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -327,6 +351,8 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.App.Session.Put(r.Context(), "flash", "An email has been sent to you with a link to reset your password.")
+
 	// redirect to login page
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -403,6 +429,19 @@ func (h *Handlers) PostResetPassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.App.ErrorLog.Println("error getting user by email:", err)
 		h.App.ErrorStatus(w, http.StatusInternalServerError)
+		return
+	}
+
+	// check if passwords are the same
+	if r.Form.Get("password") != r.Form.Get("verify_password") {
+		// set flash message
+		h.App.Session.Put(r.Context(), "flash", "Passwords do not match.")
+
+		// get entire url
+		theUrl := r.RequestURI
+
+		// redirect back
+		http.Redirect(w, r, theUrl, http.StatusSeeOther)
 		return
 	}
 

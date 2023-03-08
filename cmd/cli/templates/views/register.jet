@@ -7,76 +7,79 @@ Login
 {{block css()}} {{end}}
 
 {{block pageContent()}}
-    <h2 class="mt-5 text-center">Register</h2>
-
-    <hr>
-
-    {{if .Flash != ""}}
-    <div class="alert alert-info text-center">
-        {{.Flash}}
-    </div>
-    {{end}}
-
-    <form method="post" action="/register"
-    name="register-form" id="register-form"
-    class="d-block need-validation"
-    autocomplete="off" novalidate="">
-
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-
-    <div class="mb-3">
-        <label for="first_name" class="form-label">First name</label>
-        <input type="text" name="first_name" id="first_name" class="form-control" required="" autocomplete="first_name-new">
-
-        <div class="invalid-feedback">
-            Please enter your first name.
+    <div class="flex min-h-full flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md">
+            <img class="mx-auto h-12 w-auto" src="/public/images/gemquick-logo.png" alt="GemQuick">
+            <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">Sign up for an account</h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Or
+                <a href="/login" class="font-medium text-indigo-600 hover:text-indigo-500">sign in here</a>
+            </p>
         </div>
-    </div>
 
-    <div class="mb-3">
-        <label for="last_name" class="form-label">Last name</label>
-        <input type="text" name="last_name" id="last_name" class="form-control" required="" autocomplete="last_name-new">
+        <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+            <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                <form 
+                    class="space-y-6" 
+                    action="/register"
+                    name="register-form" 
+                    id="register-form"
+                    autocomplete="off" 
+                    novalidate="" 
+                    method="POST"
+                >
+                    <div>
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
-        <div class="invalid-feedback">
-            Please enter your last name.
+                        <label for="first_name" class="block text-sm font-medium leading-6 text-gray-900">Firstname</label>
+                        <div class="mt-2">
+                            <input id="first_name" name="first_name" type="text" autocomplete="first_name" required="" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                            <span class="invalid-feedback text-sm text-red-600">Please enter your firstname.</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="last_name" class="block text-sm font-medium leading-6 text-gray-900">Lastname</label>
+                        <div class="mt-2">
+                            <input id="last_name" name="last_name" type="text" autocomplete="last_name" required="" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                            <span class="invalid-feedback text-sm text-red-600">Please enter your lastname.</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="email" class="block text-sm font-medium leading-6 text-gray-900">Email address</label>
+                        <div class="mt-2">
+                            <input id="email" name="email" type="email" autocomplete="email" required="" class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                            <span class="invalid-feedback text-sm text-red-600">Please enter a valid email address.</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-medium leading-6 text-gray-900">Password</label>
+                        <div class="mt-2">
+                            <input id="password" name="password" type="password" autocomplete="password-new" required class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                            <div class="invalid-feedback text-sm text-red-600">
+                                Please enter a password.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="verify_password" class="block text-sm font-medium leading-6 text-gray-900">Password</label>
+                        <div class="mt-2">
+                            <input id="verify_password" name="verify_password" type="password" autocomplete="password-new" required class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                            <div class="invalid-feedback text-sm text-red-600">
+                                Please repeat your password.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <a href="javascript:void(0)" onclick="val()" class="flex w-full justify-center rounded-md bg-indigo-600 py-2 px-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Sign up</a>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
-
-    <div class="mb-3">
-        <label for="email" class="form-label">Email</label>
-        <input type="email" name="email" id="email" class="form-control" required="" autocomplete="email-new">
-
-        <div class="invalid-feedback">
-            Please enter a valid email address.
-        </div>
-    </div>
-
-    <div class="mb-3">
-        <label for="password" class="form-label">Password</label>
-        <input type="password" name="password" id="password" class="form-control" required="" autocomplete="password-new">
-        <div class="invalid-feedback">
-            Please enter a password.
-        </div>    
-    </div>
-
-     <div class="mb-3">
-        <label for="verify_password" class="form-label">Verify Password</label>
-        <input type="password" name="verify_password" id="verify_password" class="form-control" required="" autocomplete="password-new">
-        <div class="invalid-feedback">
-            Please verify your password.
-        </div>    
-    </div>
-
-    <hr>
-
-    <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Register</a>
-    <p class="mt-2">
-        <small><a href="/login">Login</a></small>
-    </p>
-    </form>
-
-    <div class="text-center">
-    <a class="btn btn-outline-secondary" href="/">Back</a>
     </div>
 {{end}}
 
