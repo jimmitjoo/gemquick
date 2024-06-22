@@ -17,3 +17,6 @@ build_cli:
 ## build: builds the command line tool dist directory
 build:
 	@go build -o ./dist/gq ./cmd/cli
+
+clean:
+	@rm -rf ./dist/*
