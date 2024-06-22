@@ -2,6 +2,7 @@ package gemquick
 
 import (
 	"fmt"
+	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
 	"log"
 	"net/http"
 	"os"
@@ -47,6 +48,7 @@ type Gemquick struct {
 	Scheduler     *cron.Cron
 	Mail          email.Mail
 	Server        Server
+	FileSystems   map[string]interface{}
 }
 
 type Server struct {
@@ -214,6 +216,8 @@ func (g *Gemquick) New(rootPath string) error {
 	g.JetViews = views
 
 	g.createRenderer()
+
+	g.FileSystems = g.createFileSystems()
 
 	g.Mail = g.createMailer(g.Render)
 
@@ -394,4 +398,30 @@ func (g *Gemquick) BuildDSN() string {
 	}
 
 	return dsn
+}
+
+func (g *Gemquick) createFileSystems() map[string]interface{} {
+	fileSystems := make(map[string]interface{})
+
+	if os.Getenv("MINIO_SECRET") != "" {
+
+		useSSL := false
+		if os.Getenv("MINIO_USE_SSL") == "true" {
+			useSSL = true
+		}
+
+		minio := miniofilesystem.Minio{
+			Endpoint:  os.Getenv("MINIO_ENDPOINT"),
+			AccessKey: os.Getenv("MINIO_ACCESS_KEY"),
+			SecretKey: os.Getenv("MINIO_SECRET"),
+			UseSSL:    useSSL,
+			Region:    os.Getenv("MINIO_REGION"),
+			Bucket:    os.Getenv("MINIO_BUCKET"),
+		}
+
+		fileSystems["minio"] = minio
+
+	}
+
+	return fileSystems
 }
