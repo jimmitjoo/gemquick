@@ -1,6 +1,7 @@
 package gemquick
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
 	"log"
@@ -219,7 +220,7 @@ func (g *Gemquick) New(rootPath string) error {
 
 	g.FileSystems = g.createFileSystems()
 
-	g.Mail = g.createMailer(g.Render)
+	g.Mail = g.createMailer()
 
 	go g.Mail.ListenForMail()
 
@@ -252,15 +253,30 @@ func (g *Gemquick) ListenAndServe() {
 	}
 
 	if g.DB.Pool != nil {
-		defer g.DB.Pool.Close()
+		defer func(Pool *sql.DB) {
+			err := Pool.Close()
+			if err != nil {
+				g.ErrorLog.Println(err)
+			}
+		}(g.DB.Pool)
 	}
 
 	if redisPool != nil {
-		defer redisPool.Close()
+		defer func(redisPool *redis.Pool) {
+			err := redisPool.Close()
+			if err != nil {
+				g.ErrorLog.Println(err)
+			}
+		}(redisPool)
 	}
 
 	if badgerConn != nil {
-		defer badgerConn.Close()
+		defer func(badgerConn *badger.DB) {
+			err := badgerConn.Close()
+			if err != nil {
+				g.ErrorLog.Println(err)
+			}
+		}(badgerConn)
 	}
 
 	g.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
@@ -300,7 +316,7 @@ func (g *Gemquick) createRenderer() {
 	g.Render = &myRenderer
 }
 
-func (g *Gemquick) createMailer(renderer *render.Render) email.Mail {
+func (g *Gemquick) createMailer() email.Mail {
 	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	m := email.Mail{
 		Templates: g.RootPath + "/email",
@@ -354,7 +370,10 @@ func (g *Gemquick) createRedisPool() *redis.Pool {
 
 			if os.Getenv("REDIS_PASSWORD") != "" {
 				if _, err := c.Do("AUTH", os.Getenv("REDIS_PASSWORD")); err != nil {
-					c.Close()
+					closeError := c.Close()
+					if closeError != nil {
+						return nil, closeError
+					}
 					return nil, err
 				}
 			}
