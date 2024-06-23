@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+type MinioClientInterface interface {
+	FPutObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.PutObjectOptions) (info minio.UploadInfo, err error)
+	ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
+	RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error
+	FGetObject(ctx context.Context, bucketName, objectName, filePath string, opts minio.GetObjectOptions) error
+}
+
 type Minio struct {
 	Endpoint  string
 	AccessKey string
@@ -17,9 +24,10 @@ type Minio struct {
 	UseSSL    bool
 	Region    string
 	Bucket    string
+	Client    MinioClientInterface
 }
 
-func (m *Minio) getCredentials() *minio.Client {
+/*func (m *Minio) getCredentials() *minio.Client {
 	client, err := minio.New(m.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(m.AccessKey, m.SecretKey, ""),
 		Secure: m.UseSSL,
@@ -29,6 +37,24 @@ func (m *Minio) getCredentials() *minio.Client {
 	} else {
 		log.Println("Connected to Minio at", m.Endpoint)
 	}
+	return client
+}*/
+
+func (m *Minio) getCredentials() MinioClientInterface {
+	if m.Client != nil {
+		return m.Client
+	}
+
+	client, err := minio.New(m.Endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(m.AccessKey, m.SecretKey, ""),
+		Secure: m.UseSSL,
+	})
+	if err != nil {
+		log.Println(err)
+	} else {
+		log.Println("Connected to Minio at", m.Endpoint)
+	}
+
 	return client
 }
 
