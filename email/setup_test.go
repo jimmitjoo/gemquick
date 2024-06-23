@@ -27,7 +27,7 @@ var mailer = Mail{
 
 func TestMain(m *testing.M) {
 	var err error
-	pool, err = dockertest.NewPool("")
+	pool, err = dockertest.NewPool(os.Getenv("DOCKER_HOST"))
 	if err != nil {
 		log.Fatal("could not connect to docker", err)
 	}
@@ -47,7 +47,11 @@ func TestMain(m *testing.M) {
 
 	if err != nil {
 		log.Println(err)
-		_ = pool.Purge(resource)
+		if resource != nil {
+			if errPurge := pool.Purge(resource); errPurge != nil {
+				log.Println("could not purge resource", errPurge)
+			}
+		}
 		log.Fatal("could not start resource", err)
 	}
 
