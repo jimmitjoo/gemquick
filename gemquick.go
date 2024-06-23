@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
+	"github.com/jimmitjoo/gemquick/filesystems/s3filesystem"
 	"log"
 	"net/http"
 	"os"
@@ -439,7 +440,18 @@ func (g *Gemquick) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["minio"] = minio
+	}
 
+	if os.Getenv("S3_BUCKET") != "" {
+		s3 := s3filesystem.S3{
+			Key:      os.Getenv("S3_KEY"),
+			Secret:   os.Getenv("S3_SECRET"),
+			Region:   os.Getenv("S3_REGION"),
+			Endpoint: os.Getenv("S3_ENDPOINT"),
+			Bucket:   os.Getenv("S3_BUCKET"),
+		}
+
+		fileSystems["s3"] = s3
 	}
 
 	return fileSystems
