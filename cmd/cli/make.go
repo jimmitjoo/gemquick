@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gertd/go-pluralize"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -86,7 +85,7 @@ func handleHandler(name string) {
 	handler := string(data)
 	handler = strings.ReplaceAll(handler, "$HANDLERNAME$", strcase.ToCamel(name))
 
-	err = ioutil.WriteFile(fileName, []byte(handler), 0644)
+	err = os.WriteFile(fileName, []byte(handler), 0644)
 	if err != nil {
 		exitGracefully(err)
 	}

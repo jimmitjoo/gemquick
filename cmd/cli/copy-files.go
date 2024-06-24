@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"errors"
-	"io/ioutil"
 	"os"
 )
 
@@ -11,7 +10,7 @@ import (
 var templateFS embed.FS
 
 func copyFileFromTemplate(templatePath, targetPath string) error {
-	// check to ensure targetPath does not already exists
+	// check to ensure targetPath does not already exist
 	if fileExists(targetPath) {
 		return errors.New(targetPath + " does already exist.")
 	}
@@ -33,7 +32,7 @@ func copyFileFromTemplate(templatePath, targetPath string) error {
 
 func copyDataToFile(data []byte, targetPath string) error {
 
-	err := ioutil.WriteFile(targetPath, data, 0644)
+	err := os.WriteFile(targetPath, data, 0644)
 	if err != nil {
 		exitGracefully(err)
 	}
