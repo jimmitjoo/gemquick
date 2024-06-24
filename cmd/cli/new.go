@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -25,7 +24,7 @@ func doNew(appName string) error {
 		appname = exploded[len(exploded)-1]
 	}
 
-	log.Println("Creating new application: " + appname)
+	color.Green("Creating new application: " + appname)
 
 	// Git clone the skeleton application
 	color.Green("\tCloning skeleton application...")
@@ -122,7 +121,10 @@ func doNew(appName string) error {
 
 	// Update the existing .go files with correct name/imports
 	color.Green("\tUpdating source files...")
-	os.Chdir("./" + appname)
+	err = os.Chdir("./" + appname)
+	if err != nil {
+		return err
+	}
 	updateSource()
 
 	// Run go mod tidy
