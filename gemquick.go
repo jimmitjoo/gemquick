@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
 	"github.com/jimmitjoo/gemquick/filesystems/s3filesystem"
+	"github.com/jimmitjoo/gemquick/sms"
 	"log"
 	"net/http"
 	"os"
@@ -48,6 +49,7 @@ type Gemquick struct {
 	EncryptionKey string
 	Cache         cache.Cache
 	Scheduler     *cron.Cron
+	SMSProvider   sms.SMSProvider
 	Mail          email.Mail
 	Server        Server
 	FileSystems   map[string]interface{}
@@ -220,6 +222,8 @@ func (g *Gemquick) New(rootPath string) error {
 	g.createRenderer()
 
 	g.FileSystems = g.createFileSystems()
+
+	g.SMSProvider = sms.CreateSMSProvider(os.Getenv("SMS_PROVIDER"))
 
 	g.Mail = g.createMailer()
 
