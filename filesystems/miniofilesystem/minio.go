@@ -27,19 +27,6 @@ type Minio struct {
 	Client    MinioClientInterface
 }
 
-/*func (m *Minio) getCredentials() *minio.Client {
-	client, err := minio.New(m.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(m.AccessKey, m.SecretKey, ""),
-		Secure: m.UseSSL,
-	})
-	if err != nil {
-		log.Println(err)
-	} else {
-		log.Println("Connected to Minio at", m.Endpoint)
-	}
-	return client
-}*/
-
 func (m *Minio) getCredentials() MinioClientInterface {
 	if m.Client != nil {
 		return m.Client
