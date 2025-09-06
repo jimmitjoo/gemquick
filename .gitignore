@@ -6,3 +6,20 @@ vendor
 cache/testdata
 email/testdata
 render/testdata
+
+# Badger database files
+*.vlog
+*.mem
+DISCARD
+KEYREGISTRY
+LOCK
+MANIFEST
+
+# Test artifacts
+*.test
+*.tmp
+coverage.html
+
+# OS files
+.DS_Store
+Thumbs.db
