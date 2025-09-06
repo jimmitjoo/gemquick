@@ -407,7 +407,7 @@ func (g *Gemquick) BuildDSN() string {
 	var dsn string
 
 	switch os.Getenv("DATABASE_TYPE") {
-	case "postgres", "postgresql":
+	case "postgres", "postgresql", "pgx":
 		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
 			os.Getenv("DATABASE_HOST"),
 			os.Getenv("DATABASE_PORT"),
@@ -418,6 +418,14 @@ func (g *Gemquick) BuildDSN() string {
 		if os.Getenv("DATABASE_PASS") != "" {
 			dsn = fmt.Sprintf("%s password=%s", dsn, os.Getenv("DATABASE_PASS"))
 		}
+
+	case "mysql", "mariadb":
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?collation=utf8mb4_unicode_ci&parseTime=true&loc=UTC&timeout=5s",
+			os.Getenv("DATABASE_USER"),
+			os.Getenv("DATABASE_PASS"),
+			os.Getenv("DATABASE_HOST"),
+			os.Getenv("DATABASE_PORT"),
+			os.Getenv("DATABASE_NAME"))
 
 	default:
 	}
