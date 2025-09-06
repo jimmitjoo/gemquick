@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
 	"github.com/jimmitjoo/gemquick/filesystems/s3filesystem"
+	"github.com/jimmitjoo/gemquick/logging"
 	"github.com/jimmitjoo/gemquick/sms"
 	"log"
 	"net/http"
@@ -34,25 +35,29 @@ var redisPool *redis.Pool
 var badgerConn *badger.DB
 
 type Gemquick struct {
-	AppName       string
-	Debug         bool
-	Version       string
-	ErrorLog      *log.Logger
-	InfoLog       *log.Logger
-	RootPath      string
-	Routes        *chi.Mux
-	Render        *render.Render
-	Session       *scs.SessionManager
-	DB            Database
-	JetViews      *jet.Set
-	config        config
-	EncryptionKey string
-	Cache         cache.Cache
-	Scheduler     *cron.Cron
-	SMSProvider   sms.SMSProvider
-	Mail          email.Mail
-	Server        Server
-	FileSystems   map[string]interface{}
+	AppName         string
+	Debug           bool
+	Version         string
+	ErrorLog        *log.Logger
+	InfoLog         *log.Logger
+	Logger          *logging.Logger
+	MetricRegistry  *logging.MetricRegistry
+	HealthMonitor   *logging.HealthMonitor
+	AppMetrics      *logging.ApplicationMetrics
+	RootPath        string
+	Routes          *chi.Mux
+	Render          *render.Render
+	Session         *scs.SessionManager
+	DB              Database
+	JetViews        *jet.Set
+	config          config
+	EncryptionKey   string
+	Cache           cache.Cache
+	Scheduler       *cron.Cron
+	SMSProvider     sms.SMSProvider
+	Mail            email.Mail
+	Server          Server
+	FileSystems     map[string]interface{}
 }
 
 type Server struct {
@@ -98,6 +103,7 @@ func (g *Gemquick) New(rootPath string) error {
 
 	// create loggers
 	infoLog, errorLog := g.startLoggers()
+	g.setupStructuredLogging()
 
 	// connect to database
 	if os.Getenv("DATABASE_TYPE") != "" {
@@ -285,9 +291,31 @@ func (g *Gemquick) ListenAndServe() {
 		}(badgerConn)
 	}
 
-	g.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
+	// Log server startup with structured logging
+	if g.Logger != nil {
+		g.Logger.Info("Starting server", map[string]interface{}{
+			"port":    os.Getenv("PORT"),
+			"version": g.Version,
+			"debug":   g.Debug,
+		})
+	} else {
+		g.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
+	}
+
 	err := srv.ListenAndServe()
-	g.ErrorLog.Fatal(err)
+	
+	// Log server shutdown
+	if g.Logger != nil {
+		if err != nil {
+			g.Logger.Fatal("Server failed to start or encountered fatal error", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			g.Logger.Info("Server shutdown gracefully")
+		}
+	} else {
+		g.ErrorLog.Fatal(err)
+	}
 }
 
 func (g *Gemquick) checkDotEnv(path string) error {
@@ -308,6 +336,60 @@ func (g *Gemquick) startLoggers() (*log.Logger, *log.Logger) {
 	errorLog = log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	return infoLog, errorLog
+}
+
+func (g *Gemquick) setupStructuredLogging() {
+	// Determine log level from environment
+	logLevel := logging.InfoLevel
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		logLevel = logging.ParseLogLevel(envLevel)
+	}
+
+	// Enable JSON logging in production
+	enableJSON := true
+	if os.Getenv("LOG_FORMAT") == "text" {
+		enableJSON = false
+	}
+
+	// Create structured logger
+	g.Logger = logging.New(logging.Config{
+		Level:      logLevel,
+		Service:    g.AppName,
+		EnableJSON: enableJSON,
+	})
+
+	// Create metric registry and application metrics
+	g.MetricRegistry = logging.NewMetricRegistry()
+	g.AppMetrics = logging.NewApplicationMetrics()
+	g.AppMetrics.Register(g.MetricRegistry)
+
+	// Create health monitor with version
+	g.HealthMonitor = logging.NewHealthMonitor(g.Version)
+
+	// Add default health checks
+	if g.DB.Pool != nil {
+		g.HealthMonitor.AddCheck("database", logging.DatabaseHealthChecker(func() error {
+			return g.DB.Pool.Ping()
+		}))
+	}
+
+	if myRedisCache != nil {
+		g.HealthMonitor.AddCheck("redis", logging.RedisHealthChecker(func() error {
+			conn := myRedisCache.Conn.Get()
+			defer conn.Close()
+			_, err := conn.Do("PING")
+			return err
+		}))
+	}
+
+	// Log startup message
+	g.Logger.Info("Structured logging initialized", map[string]interface{}{
+		"version":    g.Version,
+		"app_name":   g.AppName,
+		"debug":      g.Debug,
+		"log_level":  logLevel.String(),
+		"json_logs":  enableJSON,
+	})
 }
 
 func (g *Gemquick) createRenderer() {
