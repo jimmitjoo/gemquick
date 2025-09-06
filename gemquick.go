@@ -147,6 +147,7 @@ func (g *Gemquick) New(rootPath string) error {
 	g.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	g.Version = version
 	g.RootPath = rootPath
+	g.AppName = os.Getenv("APP_NAME")
 	g.Routes = g.routes().(*chi.Mux)
 
 	g.config = config{
