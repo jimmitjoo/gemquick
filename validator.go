@@ -1,6 +1,7 @@
 package gemquick
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -49,6 +50,11 @@ func (v *Validation) Check(ok bool, key, message string) {
 }
 
 func (v *Validation) IsEmail(field, value string) {
+	// Validate email length to prevent DoS attacks
+	if len(value) > 254 { // RFC 5321 maximum email length
+		v.AddError(field, "Email address too long")
+		return
+	}
 	if !govalidator.IsEmail(value) {
 		v.AddError(field, "Invalid email address")
 	}
@@ -76,7 +82,7 @@ func (v *Validation) IsFloat(field, value string) {
 
 func (v *Validation) IsString(field, value string) {
 	if !govalidator.IsPrintableASCII(value) {
-		v.AddError(field, "This field must be a string")
+		v.AddError(field, "This field must contain only printable characters")
 	}
 }
 
@@ -91,4 +97,44 @@ func (v *Validation) NoSpaces(field, value string) {
 	if strings.Contains(value, " ") {
 		v.AddError(field, "This field cannot contain spaces")
 	}
+}
+
+// MaxLength validates that a field doesn't exceed a maximum length
+func (v *Validation) MaxLength(field, value string, maxLength int) {
+	if len(value) > maxLength {
+		v.AddError(field, fmt.Sprintf("This field must not exceed %d characters", maxLength))
+	}
+}
+
+// MinLength validates that a field meets a minimum length requirement
+func (v *Validation) MinLength(field, value string, minLength int) {
+	if len(value) < minLength {
+		v.AddError(field, fmt.Sprintf("This field must be at least %d characters", minLength))
+	}
+}
+
+// IsAlphanumeric validates that a field contains only letters and numbers
+func (v *Validation) IsAlphanumeric(field, value string) {
+	if !govalidator.IsAlphanumeric(value) {
+		v.AddError(field, "This field must contain only letters and numbers")
+	}
+}
+
+// IsURL validates that a field contains a valid URL
+func (v *Validation) IsURL(field, value string) {
+	if !govalidator.IsURL(value) {
+		v.AddError(field, "This field must be a valid URL")
+	}
+}
+
+// SanitizeHTML removes potentially dangerous HTML/JavaScript from input
+func (v *Validation) SanitizeHTML(value string) string {
+	// Basic HTML sanitization - removes script tags and event handlers
+	value = strings.ReplaceAll(value, "<script", "&lt;script")
+	value = strings.ReplaceAll(value, "</script>", "&lt;/script&gt;")
+	value = strings.ReplaceAll(value, "javascript:", "")
+	value = strings.ReplaceAll(value, "onerror=", "")
+	value = strings.ReplaceAll(value, "onclick=", "")
+	value = strings.ReplaceAll(value, "onload=", "")
+	return value
 }
