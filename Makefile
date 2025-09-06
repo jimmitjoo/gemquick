@@ -1,5 +1,11 @@
-## test: runs all tests
+.PHONY: test test-simple cover coverage build_cli build clean
+
+## test: runs all tests with colors
 test:
+	@go run scripts/test-runner.go
+
+## test-simple: runs all tests without colors
+test-simple:
 	@go test -v ./...
 
 ## cover: open coverage in browser
