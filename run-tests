@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# Gemquick Test Runner
+# A beautiful and informative test runner with color support
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Parse arguments
+VERBOSE=false
+COVERAGE=false
+PACKAGE="./..."
+BENCH=false
+SHORT=false
+
+show_help() {
+    echo -e "${BOLD}Gemquick Test Runner${NC}"
+    echo ""
+    echo "Usage: ./run-tests [options] [package]"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+    echo "  -v, --verbose   Run with verbose output"
+    echo "  -c, --coverage  Show coverage information"
+    echo "  -b, --bench     Run benchmarks"
+    echo "  -s, --short     Run short tests only (skip Docker tests)"
+    echo "  -p, --package   Specific package to test (default: ./...)"
+    echo ""
+    echo "Examples:"
+    echo "  ./run-tests                    # Run all tests with colors"
+    echo "  ./run-tests -v                 # Run with verbose output"
+    echo "  ./run-tests -c                 # Run with coverage"
+    echo "  ./run-tests -p ./cache/...     # Test specific package"
+    echo "  ./run-tests -s                 # Skip Docker-dependent tests"
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -c|--coverage)
+            COVERAGE=true
+            shift
+            ;;
+        -b|--bench)
+            BENCH=true
+            shift
+            ;;
+        -s|--short)
+            SHORT=true
+            shift
+            ;;
+        -p|--package)
+            PACKAGE="$2"
+            shift 2
+            ;;
+        *)
+            PACKAGE="$1"
+            shift
+            ;;
+    esac
+done
+
+# Header
+echo ""
+echo -e "${BLUE}${BOLD}🚀 Gemquick Test Suite${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Build test command
+CMD="go test"
+
+if [ "$VERBOSE" = true ]; then
+    CMD="$CMD -v"
+fi
+
+if [ "$COVERAGE" = true ]; then
+    CMD="$CMD -cover"
+fi
+
+if [ "$SHORT" = true ]; then
+    CMD="$CMD -short"
+fi
+
+if [ "$BENCH" = true ]; then
+    CMD="$CMD -bench=."
+fi
+
+CMD="$CMD $PACKAGE"
+
+# Run tests and capture output
+echo -e "${CYAN}Running: $CMD${NC}"
+echo ""
+
+# Create temp file for output
+TMPFILE=$(mktemp)
+
+# Run tests and process output in real-time
+$CMD 2>&1 | while IFS= read -r line; do
+    echo "$line" >> "$TMPFILE"
+    
+    if [[ $line == *"--- PASS:"* ]]; then
+        echo -e "${GREEN}✅ $line${NC}"
+    elif [[ $line == *"--- FAIL:"* ]]; then
+        echo -e "${RED}❌ $line${NC}"
+    elif [[ $line == *"--- SKIP:"* ]]; then
+        echo -e "${YELLOW}⚠️  $line${NC}"
+    elif [[ $line == "PASS" ]]; then
+        echo -e "${GREEN}${BOLD}✅ PASS${NC}"
+    elif [[ $line == "FAIL" ]]; then
+        echo -e "${RED}${BOLD}❌ FAIL${NC}"
+    elif [[ $line == "ok"* ]]; then
+        echo -e "${GREEN}✅ $line${NC}"
+    elif [[ $line == "?"* ]] && [[ $line == *"[no test files]"* ]]; then
+        echo -e "${YELLOW}⚠️  $line${NC}"
+    elif [[ $line == *"coverage:"* ]]; then
+        # Extract coverage percentage
+        coverage=$(echo "$line" | grep -oP '\d+\.\d+%' | head -1)
+        if [ ! -z "$coverage" ]; then
+            percentage=$(echo "$coverage" | sed 's/%//')
+            if (( $(echo "$percentage >= 80" | bc -l) )); then
+                echo -e "${GREEN}📊 Coverage: $coverage${NC}"
+            elif (( $(echo "$percentage >= 60" | bc -l) )); then
+                echo -e "${YELLOW}📊 Coverage: $coverage${NC}"
+            else
+                echo -e "${RED}📊 Coverage: $coverage${NC}"
+            fi
+        else
+            echo "$line"
+        fi
+    elif [[ $line == *"Error"* ]] || [[ $line == *"error"* ]]; then
+        echo -e "${RED}$line${NC}"
+    elif [[ $line == *"Warning"* ]] || [[ $line == *"warning"* ]]; then
+        echo -e "${YELLOW}$line${NC}"
+    elif [[ $line == "=== RUN"* ]]; then
+        testname=$(echo "$line" | sed 's/=== RUN //')
+        echo -e "${CYAN}🧪 Testing: $testname${NC}"
+    else
+        echo "$line"
+    fi
+done
+
+# Get exit code
+EXIT_CODE=${PIPESTATUS[0]}
+
+# Summary
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Count results from temp file
+PASS_COUNT=$(grep -c "PASS:" "$TMPFILE" 2>/dev/null || true)
+FAIL_COUNT=$(grep -c "FAIL:" "$TMPFILE" 2>/dev/null || true)
+SKIP_COUNT=$(grep -c "SKIP:" "$TMPFILE" 2>/dev/null || true)
+
+# Ensure counts are numbers
+PASS_COUNT=${PASS_COUNT:-0}
+FAIL_COUNT=${FAIL_COUNT:-0}
+SKIP_COUNT=${SKIP_COUNT:-0}
+
+echo -e "${BOLD}📊 Test Summary${NC}"
+echo -e "  ${GREEN}✅ Passed: $PASS_COUNT${NC}"
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    echo -e "  ${RED}❌ Failed: $FAIL_COUNT${NC}"
+fi
+
+if [ "$SKIP_COUNT" -gt 0 ]; then
+    echo -e "  ${YELLOW}⚠️  Skipped: $SKIP_COUNT${NC}"
+fi
+
+# Clean up
+rm -f "$TMPFILE"
+
+echo ""
+
+# Final result
+if [ $EXIT_CODE -eq 0 ]; then
+    echo -e "${GREEN}${BOLD}✅ All tests passed!${NC}"
+else
+    echo -e "${RED}${BOLD}❌ Some tests failed!${NC}"
+fi
+
+echo ""
+
+exit $EXIT_CODE
