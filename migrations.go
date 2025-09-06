@@ -2,6 +2,7 @@ package gemquick
 
 import (
 	"log"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
@@ -11,7 +12,12 @@ import (
 )
 
 func (g *Gemquick) MigrateUp(dsn string) error {
-	m, err := migrate.New("file://"+g.RootPath+"/migrations", dsn)
+	var pathBuilder strings.Builder
+	pathBuilder.WriteString("file://")
+	pathBuilder.WriteString(g.RootPath)
+	pathBuilder.WriteString("/migrations")
+	
+	m, err := migrate.New(pathBuilder.String(), dsn)
 
 	if err != nil {
 		return err
@@ -28,7 +34,12 @@ func (g *Gemquick) MigrateUp(dsn string) error {
 }
 
 func (g *Gemquick) MigrateDownAll(dsn string) error {
-	m, err := migrate.New("file://"+g.RootPath+"/migrations", dsn)
+	var pathBuilder strings.Builder
+	pathBuilder.WriteString("file://")
+	pathBuilder.WriteString(g.RootPath)
+	pathBuilder.WriteString("/migrations")
+	
+	m, err := migrate.New(pathBuilder.String(), dsn)
 
 	if err != nil {
 		return err
@@ -44,8 +55,12 @@ func (g *Gemquick) MigrateDownAll(dsn string) error {
 }
 
 func (g *Gemquick) Steps(steps int, dsn string) error {
-
-	m, err := migrate.New("file://"+g.RootPath+"/migrations", dsn)
+	var pathBuilder strings.Builder
+	pathBuilder.WriteString("file://")
+	pathBuilder.WriteString(g.RootPath)
+	pathBuilder.WriteString("/migrations")
+	
+	m, err := migrate.New(pathBuilder.String(), dsn)
 
 	if err != nil {
 		return err
@@ -61,7 +76,12 @@ func (g *Gemquick) Steps(steps int, dsn string) error {
 }
 
 func (g *Gemquick) MigrateForce(dsn string) error {
-	m, err := migrate.New("file://"+g.RootPath+"/migrations", dsn)
+	var pathBuilder strings.Builder
+	pathBuilder.WriteString("file://")
+	pathBuilder.WriteString(g.RootPath)
+	pathBuilder.WriteString("/migrations")
+	
+	m, err := migrate.New(pathBuilder.String(), dsn)
 
 	if err != nil {
 		return err

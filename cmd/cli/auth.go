@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -20,9 +21,28 @@ func doAuth() error {
 	// migrations
 	dbType := gem.DB.DataType
 	fileName := fmt.Sprintf("%d_create_auth_tables", time.Now().UnixMicro())
-	upFile := gem.RootPath + "/migrations/" + fileName + ".up.sql"
-	downFile := gem.RootPath + "/migrations/" + fileName + ".down.sql"
-	routesFile := gem.RootPath + "/routes.go"
+	var pathBuilder strings.Builder
+	
+	// Build upFile path
+	pathBuilder.WriteString(gem.RootPath)
+	pathBuilder.WriteString("/migrations/")
+	pathBuilder.WriteString(fileName)
+	pathBuilder.WriteString(".up.sql")
+	upFile := pathBuilder.String()
+	
+	// Build downFile path
+	pathBuilder.Reset()
+	pathBuilder.WriteString(gem.RootPath)
+	pathBuilder.WriteString("/migrations/")
+	pathBuilder.WriteString(fileName)
+	pathBuilder.WriteString(".down.sql")
+	downFile := pathBuilder.String()
+	
+	// Build routesFile path
+	pathBuilder.Reset()
+	pathBuilder.WriteString(gem.RootPath)
+	pathBuilder.WriteString("/routes.go")
+	routesFile := pathBuilder.String()
 
 	err := copyFileFromTemplate("templates/migrations/auth_tables."+dbType+".up.sql", upFile)
 	if err != nil {

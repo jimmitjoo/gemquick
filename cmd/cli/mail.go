@@ -3,8 +3,23 @@ package main
 import "strings"
 
 func doMail(arg3 string) error {
-	htmlMail := gem.RootPath + "/email/" + strings.ToLower(arg3) + ".html.tmpl"
-	plainTextMail := gem.RootPath + "/email/" + strings.ToLower(arg3) + ".plain.tmpl"
+	var pathBuilder strings.Builder
+	lowerArg := strings.ToLower(arg3)
+	
+	// Build htmlMail path
+	pathBuilder.WriteString(gem.RootPath)
+	pathBuilder.WriteString("/email/")
+	pathBuilder.WriteString(lowerArg)
+	pathBuilder.WriteString(".html.tmpl")
+	htmlMail := pathBuilder.String()
+	
+	// Build plainTextMail path
+	pathBuilder.Reset()
+	pathBuilder.WriteString(gem.RootPath)
+	pathBuilder.WriteString("/email/")
+	pathBuilder.WriteString(lowerArg)
+	pathBuilder.WriteString(".plain.tmpl")
+	plainTextMail := pathBuilder.String()
 
 	err := copyFileFromTemplate("templates/email/html.tmpl.txt", htmlMail)
 	if err != nil {
