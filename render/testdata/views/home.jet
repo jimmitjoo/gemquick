@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+</head>
+<body>
+    <h1>Welcome{{if isset(.title)}} to {{.title}}{{end}}</h1>
+    <p>This is the Jet home page test template.</p>
+    {{if isset(.data)}}
+        <p>Data: {{.data}}</p>
+    {{end}}
+</body>
+</html>
