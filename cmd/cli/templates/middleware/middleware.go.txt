@@ -1,0 +1,65 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+)
+
+// $MIDDLEWARENAME$ is a middleware that $MIDDLEWARE_DESCRIPTION$
+func $MIDDLEWARENAME$(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// TODO: Implement your middleware logic here
+		// Example implementation:
+		//
+		// // Pre-processing logic
+		// if someCondition {
+		//     http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		//     return
+		// }
+		//
+		// // Add something to context
+		// ctx := context.WithValue(r.Context(), "middleware_key", "middleware_value")
+		// r = r.WithContext(ctx)
+		//
+		// // Continue to next handler
+		// next.ServeHTTP(w, r)
+		//
+		// // Post-processing logic (if needed)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// $MIDDLEWARENAME$WithConfig creates a configurable version of the middleware
+func $MIDDLEWARENAME$WithConfig(config $MIDDLEWARENAME$Config) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// TODO: Use config to customize middleware behavior
+			// Example:
+			// if !config.Enabled {
+			//     next.ServeHTTP(w, r)
+			//     return
+			// }
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// $MIDDLEWARENAME$Config holds configuration for the middleware
+type $MIDDLEWARENAME$Config struct {
+	Enabled bool
+	// TODO: Add more configuration options as needed
+	// Example:
+	// Timeout  time.Duration
+	// MaxSize  int64
+	// Headers  map[string]string
+}
+
+// Default$MIDDLEWARENAME$Config returns the default configuration
+func Default$MIDDLEWARENAME$Config() $MIDDLEWARENAME$Config {
+	return $MIDDLEWARENAME$Config{
+		Enabled: true,
+		// Set default values for other config options
+	}
+}

@@ -1,0 +1,128 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func Test$HANDLERNAME$(t *testing.T) {
+	// Setup test server
+	app := setupTestApp()
+	defer teardownTestApp(app)
+	
+	handlers := &Handlers{
+		App: app,
+	}
+
+	t.Run("successful request", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/test", nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlers.$HANDLERNAME$)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		// Add more assertions based on your handler logic
+	})
+
+	t.Run("invalid request", func(t *testing.T) {
+		// Test invalid input scenarios
+		req, err := http.NewRequest("GET", "/test?invalid=param", nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlers.$HANDLERNAME$)
+		handler.ServeHTTP(rr, req)
+
+		// Assert expected error response
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	// Add more test cases as needed
+}
+
+func Test$HANDLERNAME$WithJSON(t *testing.T) {
+	// Setup test server
+	app := setupTestApp()
+	defer teardownTestApp(app)
+	
+	handlers := &Handlers{
+		App: app,
+	}
+
+	testCases := []struct {
+		name           string
+		payload        map[string]interface{}
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name: "valid payload",
+			payload: map[string]interface{}{
+				"name": "Test Item",
+				"description": "Test Description",
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "invalid payload",
+			payload: map[string]interface{}{
+				"invalid": "field",
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonBody, err := json.Marshal(tc.payload)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest("POST", "/test", bytes.NewBuffer(jsonBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(handlers.$HANDLERNAME$)
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+			
+			if tc.expectedBody != "" {
+				assert.Contains(t, rr.Body.String(), tc.expectedBody)
+			}
+		})
+	}
+}
+
+// Helper functions for test setup
+func setupTestApp() *YourAppType {
+	// TODO: Setup your test application
+	// This might include:
+	// - Creating a test database
+	// - Setting up test configuration
+	// - Initializing test dependencies
+	
+	// Example:
+	// app := &YourAppType{}
+	// app.InfoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	// app.ErrorLog = log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	// return app
+	
+	return nil
+}
+
+func teardownTestApp(app *YourAppType) {
+	// TODO: Cleanup test resources
+	// This might include:
+	// - Closing database connections
+	// - Cleaning up test files
+	// - Resetting test state
+}

@@ -1,0 +1,220 @@
+package middleware
+
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
+)
+
+// RateLimit provides rate limiting middleware using token bucket algorithm
+func RateLimit(requests int, window time.Duration) func(http.Handler) http.Handler {
+	return RateLimitWithConfig(RateLimitConfig{
+		Requests:      requests,
+		Window:        window,
+		KeyGenerator:  DefaultKeyGenerator,
+		ErrorHandler:  DefaultRateLimitErrorHandler,
+		SkipFunc:      nil,
+	})
+}
+
+// RateLimitWithConfig creates rate limit middleware with custom configuration
+func RateLimitWithConfig(config RateLimitConfig) func(http.Handler) http.Handler {
+	if config.Requests <= 0 {
+		config.Requests = 100
+	}
+	if config.Window <= 0 {
+		config.Window = time.Minute
+	}
+	if config.KeyGenerator == nil {
+		config.KeyGenerator = DefaultKeyGenerator
+	}
+	if config.ErrorHandler == nil {
+		config.ErrorHandler = DefaultRateLimitErrorHandler
+	}
+
+	limiter := NewRateLimiter(config.Requests, config.Window)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip rate limiting if skip function returns true
+			if config.SkipFunc != nil && config.SkipFunc(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Generate key for this request
+			key := config.KeyGenerator(r)
+			
+			// Check rate limit
+			if !limiter.Allow(key) {
+				config.ErrorHandler(w, r)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RateLimitConfig holds configuration for rate limiting
+type RateLimitConfig struct {
+	Requests     int                                    // Number of requests allowed
+	Window       time.Duration                          // Time window
+	KeyGenerator func(*http.Request) string             // Function to generate key from request
+	ErrorHandler func(http.ResponseWriter, *http.Request) // Function to handle rate limit exceeded
+	SkipFunc     func(*http.Request) bool               // Function to skip rate limiting
+}
+
+// RateLimiter implements token bucket rate limiting
+type RateLimiter struct {
+	requests int
+	window   time.Duration
+	buckets  map[string]*bucket
+	mutex    sync.RWMutex
+}
+
+type bucket struct {
+	tokens   int
+	lastSeen time.Time
+}
+
+// NewRateLimiter creates a new rate limiter
+func NewRateLimiter(requests int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		requests: requests,
+		window:   window,
+		buckets:  make(map[string]*bucket),
+	}
+}
+
+// Allow checks if a request should be allowed
+func (rl *RateLimiter) Allow(key string) bool {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	now := time.Now()
+	
+	// Clean up old buckets periodically
+	if len(rl.buckets) > 1000 {
+		for k, b := range rl.buckets {
+			if now.Sub(b.lastSeen) > rl.window*2 {
+				delete(rl.buckets, k)
+			}
+		}
+	}
+
+	// Get or create bucket for this key
+	b, exists := rl.buckets[key]
+	if !exists {
+		b = &bucket{
+			tokens:   rl.requests - 1,
+			lastSeen: now,
+		}
+		rl.buckets[key] = b
+		return true
+	}
+
+	// Refill tokens based on time elapsed
+	elapsed := now.Sub(b.lastSeen)
+	tokensToAdd := int(elapsed / (rl.window / time.Duration(rl.requests)))
+	b.tokens = min(rl.requests, b.tokens+tokensToAdd)
+	b.lastSeen = now
+
+	// Check if request is allowed
+	if b.tokens > 0 {
+		b.tokens--
+		return true
+	}
+
+	return false
+}
+
+// DefaultKeyGenerator generates key from client IP
+func DefaultKeyGenerator(r *http.Request) string {
+	return getClientIP(r)
+}
+
+// DefaultRateLimitErrorHandler handles rate limit exceeded
+func DefaultRateLimitErrorHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	w.Write([]byte(`{"error":"Rate limit exceeded","retry_after":"60s"}`))
+}
+
+// Helper functions
+
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	
+	// Fall back to RemoteAddr
+	return r.RemoteAddr
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// Predefined rate limit configurations
+
+// RateLimitStrict applies strict rate limiting (10 requests per minute)
+func RateLimitStrict(next http.Handler) http.Handler {
+	return RateLimit(10, time.Minute)(next)
+}
+
+// RateLimitModerate applies moderate rate limiting (60 requests per minute)
+func RateLimitModerate(next http.Handler) http.Handler {
+	return RateLimit(60, time.Minute)(next)
+}
+
+// RateLimitGenerous applies generous rate limiting (300 requests per minute)
+func RateLimitGenerous(next http.Handler) http.Handler {
+	return RateLimit(300, time.Minute)(next)
+}
+
+// APIKeyRateLimit applies rate limiting based on API key
+func APIKeyRateLimit(requests int, window time.Duration) func(http.Handler) http.Handler {
+	return RateLimitWithConfig(RateLimitConfig{
+		Requests: requests,
+		Window:   window,
+		KeyGenerator: func(r *http.Request) string {
+			// Use API key from header or query parameter
+			apiKey := r.Header.Get("X-API-Key")
+			if apiKey == "" {
+				apiKey = r.URL.Query().Get("api_key")
+			}
+			if apiKey == "" {
+				return getClientIP(r) // Fall back to IP
+			}
+			return "api_key:" + apiKey
+		},
+	})
+}
+
+// UserRateLimit applies rate limiting based on user ID
+func UserRateLimit(requests int, window time.Duration) func(http.Handler) http.Handler {
+	return RateLimitWithConfig(RateLimitConfig{
+		Requests: requests,
+		Window:   window,
+		KeyGenerator: func(r *http.Request) string {
+			// Extract user ID from context or session
+			// This assumes user ID is stored in context
+			if userID := r.Context().Value("user_id"); userID != nil {
+				return "user:" + fmt.Sprintf("%v", userID)
+			}
+			return getClientIP(r) // Fall back to IP
+		},
+	})
+}

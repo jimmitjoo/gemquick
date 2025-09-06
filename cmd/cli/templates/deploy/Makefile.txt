@@ -1,0 +1,261 @@
+# $APPNAME Makefile
+# Provides convenient commands for development and deployment
+
+# Variables
+APP_NAME := $APPNAME
+VERSION := $(shell git describe --tags --always --dirty)
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+COMMIT := $(shell git rev-parse HEAD)
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+
+# Go variables
+GOCMD := go
+GOBUILD := $(GOCMD) build
+GOTEST := $(GOCMD) test
+GOTOOL := $(GOCMD) tool
+GOMOD := $(GOCMD) mod
+BINARY_NAME := main
+BINARY_PATH := ./cmd/web
+
+# Docker variables
+DOCKER_IMAGE := $(APP_NAME):latest
+DOCKER_DEV_IMAGE := $(APP_NAME):dev
+
+# Build flags
+LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.Commit=$(COMMIT)"
+
+.PHONY: help build build-dev test test-verbose test-coverage clean deps deps-update \
+        docker-build docker-build-dev docker-up docker-down docker-logs \
+        deploy deploy-dev rollback lint format migrate-up migrate-down \
+        generate security-check benchmark profile install-tools
+
+# Default target
+all: build
+
+# Help target
+help: ## Show this help message
+	@echo 'Usage:'
+	@echo '  make <target>'
+	@echo ''
+	@echo 'Targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+# Development targets
+build: ## Build the application
+	@echo "Building $(APP_NAME)..."
+	CGO_ENABLED=0 GOOS=linux $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) $(BINARY_PATH)
+
+build-dev: ## Build the application for development
+	@echo "Building $(APP_NAME) for development..."
+	$(GOBUILD) -race -o $(BINARY_NAME) $(BINARY_PATH)
+
+run: ## Run the application in development mode
+	@echo "Running $(APP_NAME)..."
+	$(GOCMD) run $(BINARY_PATH)
+
+run-dev: ## Run the application with air for hot reloading
+	@echo "Running $(APP_NAME) with hot reloading..."
+	air -c .air.toml
+
+# Testing targets
+test: ## Run tests
+	@echo "Running tests..."
+	$(GOTEST) -v ./...
+
+test-verbose: ## Run tests with verbose output
+	@echo "Running tests with verbose output..."
+	$(GOTEST) -v -race ./...
+
+test-coverage: ## Run tests with coverage
+	@echo "Running tests with coverage..."
+	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTOOL) cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	$(GOTEST) -v -race -tags=integration ./tests/integration/...
+
+benchmark: ## Run benchmarks
+	@echo "Running benchmarks..."
+	$(GOTEST) -bench=. -benchmem ./...
+
+# Code quality targets
+lint: ## Run linter
+	@echo "Running linter..."
+	golangci-lint run ./...
+
+format: ## Format code
+	@echo "Formatting code..."
+	$(GOCMD) fmt ./...
+	goimports -w .
+
+vet: ## Run go vet
+	@echo "Running go vet..."
+	$(GOCMD) vet ./...
+
+security-check: ## Run security checks
+	@echo "Running security checks..."
+	gosec ./...
+	govulncheck ./...
+
+# Dependencies
+deps: ## Download dependencies
+	@echo "Downloading dependencies..."
+	$(GOMOD) download
+	$(GOMOD) tidy
+
+deps-update: ## Update dependencies
+	@echo "Updating dependencies..."
+	$(GOMOD) get -u ./...
+	$(GOMOD) tidy
+
+# Docker targets
+docker-build: ## Build Docker image
+	@echo "Building Docker image..."
+	docker build -t $(DOCKER_IMAGE) .
+
+docker-build-dev: ## Build development Docker image
+	@echo "Building development Docker image..."
+	docker build -f Dockerfile.dev -t $(DOCKER_DEV_IMAGE) .
+
+docker-up: ## Start Docker containers
+	@echo "Starting Docker containers..."
+	docker-compose up -d
+
+docker-up-dev: ## Start development Docker containers
+	@echo "Starting development Docker containers..."
+	docker-compose -f docker-compose.dev.yml up -d
+
+docker-down: ## Stop Docker containers
+	@echo "Stopping Docker containers..."
+	docker-compose down
+
+docker-logs: ## Show Docker container logs
+	docker-compose logs -f
+
+docker-clean: ## Clean Docker containers and images
+	@echo "Cleaning Docker containers and images..."
+	docker-compose down -v
+	docker system prune -f
+
+# Database targets
+migrate-up: ## Run database migrations up
+	@echo "Running migrations up..."
+	./$(BINARY_NAME) migrate up
+
+migrate-down: ## Run database migrations down
+	@echo "Running migrations down..."
+	./$(BINARY_NAME) migrate down
+
+migrate-status: ## Show migration status
+	@echo "Migration status..."
+	./$(BINARY_NAME) migrate status
+
+migrate-create: ## Create new migration (usage: make migrate-create name=migration_name)
+	@echo "Creating migration: $(name)"
+	./$(BINARY_NAME) make migration $(name)
+
+# Database operations
+db-seed: ## Seed database with sample data
+	@echo "Seeding database..."
+	./$(BINARY_NAME) db:seed
+
+db-reset: ## Reset database (drop and recreate)
+	@echo "Resetting database..."
+	./$(BINARY_NAME) db:reset
+
+# Deployment targets
+deploy: ## Deploy to production
+	@echo "Deploying to production..."
+	./deploy.sh deploy
+
+deploy-staging: ## Deploy to staging
+	@echo "Deploying to staging..."
+	./deploy.sh deploy staging
+
+rollback: ## Rollback deployment
+	@echo "Rolling back deployment..."
+	./deploy.sh rollback
+
+status: ## Show deployment status
+	./deploy.sh status
+
+# Generation targets
+generate: ## Run go generate
+	@echo "Running go generate..."
+	$(GOCMD) generate ./...
+
+gen-controller: ## Generate API controller (usage: make gen-controller name=ControllerName)
+	@echo "Generating controller: $(name)"
+	./$(BINARY_NAME) make api-controller $(name)
+
+gen-middleware: ## Generate middleware (usage: make gen-middleware name=MiddlewareName)
+	@echo "Generating middleware: $(name)"
+	./$(BINARY_NAME) make middleware $(name)
+
+gen-model: ## Generate model (usage: make gen-model name=ModelName)
+	@echo "Generating model: $(name)"
+	./$(BINARY_NAME) make model $(name)
+
+gen-docker: ## Generate Docker configuration
+	@echo "Generating Docker configuration..."
+	./$(BINARY_NAME) make docker
+
+# Utility targets
+clean: ## Clean build artifacts
+	@echo "Cleaning..."
+	rm -f $(BINARY_NAME)
+	rm -f coverage.out coverage.html
+	rm -rf tmp/
+	$(GOCMD) clean
+
+install-tools: ## Install development tools
+	@echo "Installing development tools..."
+	$(GOCMD) install github.com/cosmtrek/air@latest
+	$(GOCMD) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GOCMD) install golang.org/x/tools/cmd/goimports@latest
+	$(GOCMD) install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+	$(GOCMD) install golang.org/x/vuln/cmd/govulncheck@latest
+
+profile: ## Run application with profiling
+	@echo "Running with profiling..."
+	$(GOCMD) run $(BINARY_PATH) -cpuprofile=cpu.prof -memprofile=mem.prof
+
+profile-web: ## Start web profiler
+	@echo "Starting web profiler on :6060..."
+	$(GOCMD) run $(BINARY_PATH) -profile=web
+
+# SSL certificate generation
+ssl-cert: ## Generate SSL certificates for development
+	@echo "Generating SSL certificates..."
+	openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+		-subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+
+# Environment setup
+setup-dev: ## Set up development environment
+	@echo "Setting up development environment..."
+	cp .env.example .env
+	$(MAKE) install-tools
+	$(MAKE) deps
+	$(MAKE) docker-up-dev
+	@echo "Development environment ready!"
+
+setup-prod: ## Set up production environment
+	@echo "Setting up production environment..."
+	cp .env.production .env
+	$(MAKE) deps
+	$(MAKE) migrate-up
+	@echo "Production environment ready!"
+
+# Information targets
+info: ## Show project information
+	@echo "Project: $(APP_NAME)"
+	@echo "Version: $(VERSION)"
+	@echo "Build Time: $(BUILD_TIME)"
+	@echo "Commit: $(COMMIT)"
+	@echo "Branch: $(BRANCH)"
+	@echo "Go Version: $(shell $(GOCMD) version)"
+
+# Quick development workflow
+dev: deps build-dev docker-up-dev ## Quick development setup

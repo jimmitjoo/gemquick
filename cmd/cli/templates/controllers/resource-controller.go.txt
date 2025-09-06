@@ -1,0 +1,196 @@
+package handlers
+
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// $CONTROLLERNAME$Index displays the $CONTROLLERNAME_LOWER$ listing page
+func (h *Handlers) $CONTROLLERNAME$Index(w http.ResponseWriter, r *http.Request) {
+	// TODO: Fetch $CONTROLLERNAME_LOWER$s from database
+	// Example:
+	// $CONTROLLERNAME_LOWER$s, err := h.Models.$CONTROLLERNAME$s.GetAll()
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	//     return
+	// }
+
+	data := make(map[string]interface{})
+	data["title"] = "$CONTROLLERNAME$s"
+	// data["$CONTROLLERNAME_LOWER$s"] = $CONTROLLERNAME_LOWER$s
+
+	err := h.render(w, r, "$CONTROLLERNAME_LOWER$s/index", &templateData{Data: data})
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+	}
+}
+
+// $CONTROLLERNAME$Show displays a single $CONTROLLERNAME_LOWER$
+func (h *Handlers) $CONTROLLERNAME$Show(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Fetch $CONTROLLERNAME_LOWER$ from database
+	// Example:
+	// $CONTROLLERNAME_LOWER$, err := h.Models.$CONTROLLERNAME$s.Get(id)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     http.Error(w, "Not Found", http.StatusNotFound)
+	//     return
+	// }
+
+	data := make(map[string]interface{})
+	data["title"] = fmt.Sprintf("$CONTROLLERNAME$ #%d", id)
+	data["id"] = id
+	// data["$CONTROLLERNAME_LOWER$"] = $CONTROLLERNAME_LOWER$
+
+	err = h.render(w, r, "$CONTROLLERNAME_LOWER$s/show", &templateData{Data: data})
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+	}
+}
+
+// $CONTROLLERNAME$Create displays the create $CONTROLLERNAME_LOWER$ form
+func (h *Handlers) $CONTROLLERNAME$Create(w http.ResponseWriter, r *http.Request) {
+	data := make(map[string]interface{})
+	data["title"] = "Create $CONTROLLERNAME$"
+
+	err := h.render(w, r, "$CONTROLLERNAME_LOWER$s/create", &templateData{Data: data})
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+	}
+}
+
+// $CONTROLLERNAME$Store handles the creation of a new $CONTROLLERNAME_LOWER$
+func (h *Handlers) $CONTROLLERNAME$Store(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Validate and create $CONTROLLERNAME_LOWER$
+	// Example:
+	// $CONTROLLERNAME_LOWER$ := models.$CONTROLLERNAME${
+	//     Name:        r.Form.Get("name"),
+	//     Description: r.Form.Get("description"),
+	// }
+	//
+	// err = h.Models.$CONTROLLERNAME$s.Insert(&$CONTROLLERNAME_LOWER$)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     h.App.Session.Put(r.Context(), "error", "Failed to create $CONTROLLERNAME_LOWER$")
+	//     http.Redirect(w, r, "/$CONTROLLERNAME_LOWER$s/create", http.StatusSeeOther)
+	//     return
+	// }
+
+	h.App.Session.Put(r.Context(), "flash", "$CONTROLLERNAME$ created successfully")
+	http.Redirect(w, r, "/$CONTROLLERNAME_LOWER$s", http.StatusSeeOther)
+}
+
+// $CONTROLLERNAME$Edit displays the edit $CONTROLLERNAME_LOWER$ form
+func (h *Handlers) $CONTROLLERNAME$Edit(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Fetch $CONTROLLERNAME_LOWER$ from database
+	// Example:
+	// $CONTROLLERNAME_LOWER$, err := h.Models.$CONTROLLERNAME$s.Get(id)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     http.Error(w, "Not Found", http.StatusNotFound)
+	//     return
+	// }
+
+	data := make(map[string]interface{})
+	data["title"] = fmt.Sprintf("Edit $CONTROLLERNAME$ #%d", id)
+	data["id"] = id
+	// data["$CONTROLLERNAME_LOWER$"] = $CONTROLLERNAME_LOWER$
+
+	err = h.render(w, r, "$CONTROLLERNAME_LOWER$s/edit", &templateData{Data: data})
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+	}
+}
+
+// $CONTROLLERNAME$Update handles updating an existing $CONTROLLERNAME_LOWER$
+func (h *Handlers) $CONTROLLERNAME$Update(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Validate and update $CONTROLLERNAME_LOWER$
+	// Example:
+	// $CONTROLLERNAME_LOWER$, err := h.Models.$CONTROLLERNAME$s.Get(id)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     h.App.Session.Put(r.Context(), "error", "$CONTROLLERNAME$ not found")
+	//     http.Redirect(w, r, "/$CONTROLLERNAME_LOWER$s", http.StatusSeeOther)
+	//     return
+	// }
+	//
+	// $CONTROLLERNAME_LOWER$.Name = r.Form.Get("name")
+	// $CONTROLLERNAME_LOWER$.Description = r.Form.Get("description")
+	// $CONTROLLERNAME_LOWER$.UpdatedAt = time.Now()
+	//
+	// err = h.Models.$CONTROLLERNAME$s.Update(&$CONTROLLERNAME_LOWER$)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     h.App.Session.Put(r.Context(), "error", "Failed to update $CONTROLLERNAME_LOWER$")
+	//     http.Redirect(w, r, fmt.Sprintf("/$CONTROLLERNAME_LOWER$s/%d/edit", id), http.StatusSeeOther)
+	//     return
+	// }
+
+	h.App.Session.Put(r.Context(), "flash", "$CONTROLLERNAME$ updated successfully")
+	http.Redirect(w, r, fmt.Sprintf("/$CONTROLLERNAME_LOWER$s/%d", id), http.StatusSeeOther)
+}
+
+// $CONTROLLERNAME$Destroy handles deleting a $CONTROLLERNAME_LOWER$
+func (h *Handlers) $CONTROLLERNAME$Destroy(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Delete $CONTROLLERNAME_LOWER$ from database
+	// Example:
+	// err = h.Models.$CONTROLLERNAME$s.Delete(id)
+	// if err != nil {
+	//     h.App.ErrorLog.Println(err)
+	//     h.App.Session.Put(r.Context(), "error", "Failed to delete $CONTROLLERNAME_LOWER$")
+	//     http.Redirect(w, r, "/$CONTROLLERNAME_LOWER$s", http.StatusSeeOther)
+	//     return
+	// }
+
+	h.App.Session.Put(r.Context(), "flash", "$CONTROLLERNAME$ deleted successfully")
+	http.Redirect(w, r, "/$CONTROLLERNAME_LOWER$s", http.StatusSeeOther)
+}

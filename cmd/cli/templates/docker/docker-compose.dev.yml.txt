@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
+    environment:
+      - PORT=${PORT:-4000}
+      - DEBUG=true
+      - DATABASE_TYPE=postgres
+      - DATABASE_DSN=postgres://${DB_USER:-$APPNAME}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-$APPNAME}?sslmode=disable
+      - CACHE=redis
+      - SESSION_TYPE=redis
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_PREFIX=$APPNAME_dev
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JOB_WORKERS=3
+      - JOB_ENABLE_PERSISTENCE=true
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app
+      - /app/tmp
+    networks:
+      - dev-network
+    restart: unless-stopped
+    command: ["air", "-c", ".air.toml"]
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-$APPNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-$APPNAME}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - dev-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - dev-network
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local

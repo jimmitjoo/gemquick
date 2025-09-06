@@ -1,0 +1,226 @@
+{{template "base" .}}
+
+{{define "css"}}
+<style>
+    .hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4rem 0;
+        text-align: center;
+    }
+    
+    .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .hero p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+    }
+    
+    .features {
+        padding: 4rem 0;
+        background: #f8f9fa;
+    }
+    
+    .feature-card {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+        transition: transform 0.2s;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .stats {
+        padding: 3rem 0;
+        text-align: center;
+    }
+    
+    .stat-item {
+        margin-bottom: 2rem;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+    }
+</style>
+{{end}}
+
+{{define "content"}}
+<section class="hero">
+    <div class="container">
+        <h1>Welcome to $CONTROLLERNAME$</h1>
+        <p>Your modern web application built with Gemquick framework</p>
+        {{if .flash}}
+            <div class="alert alert-success mt-3">{{.flash}}</div>
+        {{end}}
+        {{if .error}}
+            <div class="alert alert-danger mt-3">{{.error}}</div>
+        {{end}}
+    </div>
+</section>
+
+<section class="features">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Fast & Efficient</h3>
+                    <p>Built with Go for maximum performance and scalability. Handle thousands of concurrent requests with ease.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>Secure by Default</h3>
+                    <p>Includes built-in security features like CSRF protection, rate limiting, and secure headers middleware.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Developer Friendly</h3>
+                    <p>Modern development tools including hot reloading, comprehensive CLI generators, and Docker support.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3>Background Jobs</h3>
+                    <p>Powerful job queue system with retry logic, scheduling, and monitoring for background tasks.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">📡</div>
+                    <h3>Real-time Features</h3>
+                    <p>Built-in WebSocket support for real-time communication, chat systems, and live updates.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Observability</h3>
+                    <p>Structured logging, metrics collection, and health monitoring built into the framework.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="stats">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <div class="stat-number" id="requests-count">0</div>
+                    <div class="stat-label">Requests Served</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <div class="stat-number" id="uptime">0s</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <div class="stat-number" id="active-users">0</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-item">
+                    <div class="stat-number" id="response-time">0ms</div>
+                    <div class="stat-label">Avg Response Time</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{{end}}
+
+{{define "js"}}
+<script>
+    // Animate numbers on page load
+    function animateNumber(element, target, duration = 2000) {
+        let start = 0;
+        const increment = target / (duration / 16);
+        
+        function updateNumber() {
+            start += increment;
+            if (start < target) {
+                element.textContent = Math.floor(start).toLocaleString();
+                requestAnimationFrame(updateNumber);
+            } else {
+                element.textContent = target.toLocaleString();
+            }
+        }
+        
+        updateNumber();
+    }
+    
+    // Animate stats when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        animateNumber(document.getElementById('requests-count'), 12543);
+        animateNumber(document.getElementById('active-users'), 89);
+        
+        // Animate uptime
+        let uptimeSeconds = 0;
+        const uptimeElement = document.getElementById('uptime');
+        const uptimeInterval = setInterval(() => {
+            uptimeSeconds++;
+            const hours = Math.floor(uptimeSeconds / 3600);
+            const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+            const seconds = uptimeSeconds % 60;
+            
+            if (hours > 0) {
+                uptimeElement.textContent = `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                uptimeElement.textContent = `${minutes}m ${seconds}s`;
+            } else {
+                uptimeElement.textContent = `${seconds}s`;
+            }
+        }, 1000);
+        
+        // Simulate response time
+        setTimeout(() => {
+            document.getElementById('response-time').textContent = '42ms';
+        }, 1000);
+    });
+    
+    // Add some interactive effects
+    document.querySelectorAll('.feature-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+</script>
+{{end}}
