@@ -226,7 +226,7 @@ func (g *Gemquick) New(rootPath string) error {
 	switch g.config.sessionType {
 	case "redis":
 		sess.RedisPool = myRedisCache.Conn
-	case "mysql", "postgres", "mariadb", "postgresql", "pgx":
+	case "mysql", "postgres", "mariadb", "postgresql", "pgx", "sqlite", "sqlite3":
 		sess.DBPool = g.DB.Pool
 	}
 
@@ -554,6 +554,19 @@ func (g *Gemquick) BuildDSN() string {
 			os.Getenv("DATABASE_HOST"),
 			os.Getenv("DATABASE_PORT"),
 			os.Getenv("DATABASE_NAME"))
+
+	case "sqlite", "sqlite3":
+		// For SQLite, we typically use just the database file path
+		// If DATABASE_NAME contains a full path, use it as is
+		// Otherwise, use it as a filename in the data directory
+		dbPath := os.Getenv("DATABASE_NAME")
+		if !strings.HasPrefix(dbPath, "/") && !strings.Contains(dbPath, ":") {
+			// Relative path - put it in the data directory
+			dsn = fmt.Sprintf("%s/data/%s", g.RootPath, dbPath)
+		} else {
+			// Absolute path or special SQLite DSN (like :memory:)
+			dsn = dbPath
+		}
 
 	default:
 	}
