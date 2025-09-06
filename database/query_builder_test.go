@@ -65,7 +65,7 @@ func TestQueryBuilder_Where(t *testing.T) {
 			ToSQL()
 		require.NoError(t, err)
 		assert.Equal(t, "SELECT * FROM users WHERE id IN (?, ?, ?)", sql)
-		assert.Empty(t, params) // IN clause is built differently
+		assert.Equal(t, []interface{}{1, 2, 3}, params) // Parameters now properly handled
 	})
 	
 	t.Run("where between", func(t *testing.T) {
@@ -74,8 +74,8 @@ func TestQueryBuilder_Where(t *testing.T) {
 			WhereBetween("age", 18, 65).
 			ToSQL()
 		require.NoError(t, err)
-		assert.Equal(t, "SELECT * FROM users WHERE age BETWEEN 18 AND 65", sql)
-		assert.Empty(t, params) // BETWEEN clause is built differently
+		assert.Equal(t, "SELECT * FROM users WHERE age BETWEEN ? AND ?", sql)
+		assert.Equal(t, []interface{}{18, 65}, params) // Parameters now properly handled for security
 	})
 	
 	t.Run("where null", func(t *testing.T) {

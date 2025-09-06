@@ -27,6 +27,7 @@ type whereCondition struct {
 	operator string
 	value    interface{}
 	logic    string // AND or OR
+	params   []interface{} // For complex conditions like BETWEEN and IN
 }
 
 type joinClause struct {
@@ -94,6 +95,7 @@ func (qb *QueryBuilder) WhereIn(column string, values []interface{}) *QueryBuild
 		column:   column,
 		operator: "IN",
 		value:    inClause,
+		params:   values,
 		logic:    "AND",
 	})
 	return qb
@@ -104,7 +106,8 @@ func (qb *QueryBuilder) WhereBetween(column string, start, end interface{}) *Que
 	qb.whereConds = append(qb.whereConds, whereCondition{
 		column:   column,
 		operator: "BETWEEN",
-		value:    fmt.Sprintf("%v AND %v", start, end),
+		value:    "? AND ?",
+		params:   []interface{}{start, end},
 		logic:    "AND",
 	})
 	return qb
@@ -250,10 +253,12 @@ func (qb *QueryBuilder) ToSQL() (string, []interface{}, error) {
 			switch cond.operator {
 			case "IS NULL", "IS NOT NULL":
 				query.WriteString(fmt.Sprintf("%s %s", cond.column, cond.operator))
-			case "IN":
+			case "IN", "BETWEEN":
 				query.WriteString(fmt.Sprintf("%s %s %s", cond.column, cond.operator, cond.value))
-			case "BETWEEN":
-				query.WriteString(fmt.Sprintf("%s %s %s", cond.column, cond.operator, cond.value))
+				// Add parameters for IN and BETWEEN clauses
+				if cond.params != nil {
+					params = append(params, cond.params...)
+				}
 			default:
 				query.WriteString(fmt.Sprintf("%s %s ?", cond.column, cond.operator))
 				params = append(params, cond.value)
@@ -417,8 +422,19 @@ func (qb *QueryBuilder) Update(data map[string]interface{}) (sql.Result, error) 
 			if i > 0 {
 				query += fmt.Sprintf(" %s ", cond.logic)
 			}
-			query += fmt.Sprintf("%s %s ?", cond.column, cond.operator)
-			params = append(params, cond.value)
+			
+			switch cond.operator {
+			case "IS NULL", "IS NOT NULL":
+				query += fmt.Sprintf("%s %s", cond.column, cond.operator)
+			case "IN", "BETWEEN":
+				query += fmt.Sprintf("%s %s %s", cond.column, cond.operator, cond.value)
+				if cond.params != nil {
+					params = append(params, cond.params...)
+				}
+			default:
+				query += fmt.Sprintf("%s %s ?", cond.column, cond.operator)
+				params = append(params, cond.value)
+			}
 		}
 	}
 	
@@ -441,8 +457,19 @@ func (qb *QueryBuilder) Delete() (sql.Result, error) {
 			if i > 0 {
 				query += fmt.Sprintf(" %s ", cond.logic)
 			}
-			query += fmt.Sprintf("%s %s ?", cond.column, cond.operator)
-			params = append(params, cond.value)
+			
+			switch cond.operator {
+			case "IS NULL", "IS NOT NULL":
+				query += fmt.Sprintf("%s %s", cond.column, cond.operator)
+			case "IN", "BETWEEN":
+				query += fmt.Sprintf("%s %s %s", cond.column, cond.operator, cond.value)
+				if cond.params != nil {
+					params = append(params, cond.params...)
+				}
+			default:
+				query += fmt.Sprintf("%s %s ?", cond.column, cond.operator)
+				params = append(params, cond.value)
+			}
 		}
 	}
 	
