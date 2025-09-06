@@ -53,7 +53,7 @@ func DefaultCSRFConfig() CSRFConfig {
 		RequestHeader:  "X-CSRF-Token",
 		FormField:      "csrf_token",
 		ExemptPaths:    []string{"/health", "/metrics", "/health/ready", "/health/live"},
-		ExemptGlobs:    []string{"/api/*", "/webhook/*"},
+		ExemptGlobs:    []string{"/api/*", "/webhook/*"}, // Secure wildcard matching
 		ExemptMethods:  []string{"GET", "HEAD", "OPTIONS"},
 	}
 }
@@ -140,18 +140,7 @@ func isAJAXRequest(r *http.Request) bool {
 
 // logCSRFFailure logs CSRF protection failures for monitoring
 func logCSRFFailure(r *http.Request) {
-	// This would integrate with your logging system
-	// For now, we'll just log basic information
-	clientIP := getClientIP(r)
-	userAgent := r.UserAgent()
-	path := r.URL.Path
-	method := r.Method
-	
-	// In a real implementation, you'd use your structured logger here
-	_ = clientIP
-	_ = userAgent
-	_ = path
-	_ = method
+	DefaultSecurityLogger.LogCSRFFailure(r, "CSRF token validation failed")
 }
 
 // DoubleSubmitCSRFMiddleware implements double submit cookie pattern
@@ -207,13 +196,40 @@ func DoubleSubmitCSRFMiddleware(config CSRFConfig) func(next http.Handler) http.
 	}
 }
 
-// matchGlob performs simple glob pattern matching
+// matchGlob performs secure glob pattern matching
 func matchGlob(pattern, path string) bool {
+	if pattern == path {
+		return true
+	}
+	
+	// Only support trailing wildcards for security
 	if strings.HasSuffix(pattern, "*") {
 		prefix := strings.TrimSuffix(pattern, "*")
+		
+		// Validate that prefix is not empty and doesn't contain suspicious patterns
+		if prefix == "" {
+			return false // Don't allow just "*"
+		}
+		
+		// Prevent path traversal attempts
+		if strings.Contains(prefix, "..") || strings.Contains(path, "..") {
+			return false
+		}
+		
+		// For directory-style matching, ensure we don't get false positives
+		// "/api/*" should match "/api/users" but not "/apikey"
+		if !strings.HasSuffix(prefix, "/") {
+			// If no trailing slash, require exact prefix match with a following slash or end
+			if !strings.HasPrefix(path, prefix+"/") && path != prefix {
+				return false
+			}
+		}
+		
 		return strings.HasPrefix(path, prefix)
 	}
-	return pattern == path
+	
+	// No wildcard matching for other patterns for security
+	return false
 }
 
 // CSRFTokenHelper provides utility functions for CSRF tokens
