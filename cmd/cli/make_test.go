@@ -526,6 +526,317 @@ func TestMakeSession(t *testing.T) {
 	})
 }
 
+func TestAPIControllerGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "api_controller_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create necessary directories
+	err = os.MkdirAll("controllers", 0755)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates API controller successfully", func(t *testing.T) {
+		err := doAPIController("Product")
+		require.NoError(t, err)
+
+		// Check if controller file was created
+		controllerFile := "controllers/product_controller.go"
+		assert.FileExists(t, controllerFile)
+
+		// Check if test file was created
+		testFile := "controllers/product_controller_test.go"
+		assert.FileExists(t, testFile)
+
+		// Verify content
+		content, err := os.ReadFile(controllerFile)
+		require.NoError(t, err)
+		
+		contentStr := string(content)
+		assert.Contains(t, contentStr, "ProductController")
+		assert.Contains(t, contentStr, "products") // Route prefix
+		assert.Contains(t, contentStr, "func (c *ProductController) List")
+		assert.Contains(t, contentStr, "func (c *ProductController) Create")
+	})
+
+	t.Run("fails with empty name", func(t *testing.T) {
+		err := doAPIController("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must give the API controller a name")
+	})
+}
+
+func TestResourceControllerGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "resource_controller_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create necessary directories
+	err = os.MkdirAll("handlers", 0755)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates resource controller successfully", func(t *testing.T) {
+		err := doResourceController("User")
+		require.NoError(t, err)
+
+		// Check if controller file was created
+		controllerFile := "handlers/user_handlers.go"
+		assert.FileExists(t, controllerFile)
+
+		// Verify content
+		content, err := os.ReadFile(controllerFile)
+		require.NoError(t, err)
+		
+		contentStr := string(content)
+		assert.Contains(t, contentStr, "UserIndex")
+		assert.Contains(t, contentStr, "UserShow")
+		assert.Contains(t, contentStr, "UserCreate")
+		assert.Contains(t, contentStr, "UserStore")
+		assert.Contains(t, contentStr, "UserEdit")
+		assert.Contains(t, contentStr, "UserUpdate")
+		assert.Contains(t, contentStr, "UserDestroy")
+	})
+
+	t.Run("fails with empty name", func(t *testing.T) {
+		err := doResourceController("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must give the resource controller a name")
+	})
+}
+
+func TestMiddlewareGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "middleware_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates basic middleware successfully", func(t *testing.T) {
+		err := doMiddleware("Authentication")
+		require.NoError(t, err)
+
+		// Check if middleware file was created
+		middlewareFile := "middleware/authentication.go"
+		assert.FileExists(t, middlewareFile)
+
+		// Verify content
+		content, err := os.ReadFile(middlewareFile)
+		require.NoError(t, err)
+		
+		contentStr := string(content)
+		assert.Contains(t, contentStr, "func Authentication(next http.Handler)")
+		assert.Contains(t, contentStr, "AuthenticationConfig")
+	})
+
+	t.Run("creates CORS middleware with special template", func(t *testing.T) {
+		err := doMiddleware("cors")
+		require.NoError(t, err)
+
+		// Check if CORS middleware file was created
+		middlewareFile := "middleware/cors.go"
+		assert.FileExists(t, middlewareFile)
+
+		// Verify CORS-specific content
+		content, err := os.ReadFile(middlewareFile)
+		require.NoError(t, err)
+		
+		contentStr := string(content)
+		assert.Contains(t, contentStr, "Access-Control-Allow-Origin")
+		assert.Contains(t, contentStr, "CORSConfig")
+	})
+
+	t.Run("fails with empty name", func(t *testing.T) {
+		err := doMiddleware("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must give the middleware a name")
+	})
+}
+
+func TestDockerGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "docker_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates Docker files successfully", func(t *testing.T) {
+		err := doDocker()
+		require.NoError(t, err)
+
+		expectedFiles := []string{
+			"Dockerfile",
+			"Dockerfile.dev",
+			"docker-compose.yml",
+			"docker-compose.dev.yml",
+			"nginx.conf",
+			".air.toml",
+		}
+
+		for _, file := range expectedFiles {
+			assert.FileExists(t, file, "Expected Docker file %s to be created", file)
+		}
+
+		// Verify Dockerfile content
+		dockerfileContent, err := os.ReadFile("Dockerfile")
+		require.NoError(t, err)
+		
+		dockerfileStr := string(dockerfileContent)
+		assert.Contains(t, dockerfileStr, "FROM golang:")
+		assert.Contains(t, dockerfileStr, "COPY go.mod go.sum")
+		assert.Contains(t, dockerfileStr, "RUN go mod download")
+	})
+
+	t.Run("skips existing files", func(t *testing.T) {
+		// Create a file that already exists
+		err := os.WriteFile("Dockerfile", []byte("existing content"), 0644)
+		require.NoError(t, err)
+
+		err = doDocker()
+		require.NoError(t, err)
+
+		// Verify the existing file wasn't overwritten
+		content, err := os.ReadFile("Dockerfile")
+		require.NoError(t, err)
+		assert.Equal(t, "existing content", string(content))
+	})
+}
+
+func TestDeployGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "deploy_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates deployment files successfully", func(t *testing.T) {
+		err := doDeploy()
+		require.NoError(t, err)
+
+		expectedFiles := []string{
+			"deploy.sh",
+			".github/workflows/deploy.yml",
+			"Makefile",
+		}
+
+		for _, file := range expectedFiles {
+			assert.FileExists(t, file, "Expected deployment file %s to be created", file)
+		}
+
+		// Verify deploy.sh is executable
+		stat, err := os.Stat("deploy.sh")
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0755), stat.Mode().Perm())
+
+		// Verify GitHub Actions workflow content
+		workflowContent, err := os.ReadFile(".github/workflows/deploy.yml")
+		require.NoError(t, err)
+		
+		workflowStr := string(workflowContent)
+		assert.Contains(t, workflowStr, "name: Deploy")
+		assert.Contains(t, workflowStr, "on:")
+		assert.Contains(t, workflowStr, "jobs:")
+	})
+}
+
+func TestTestFileGeneration(t *testing.T) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "test_gen_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(originalWd)
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// Create necessary directories
+	err = os.MkdirAll("handlers", 0755)
+	require.NoError(t, err)
+
+	// Create go.mod
+	err = os.WriteFile("go.mod", []byte("module testapp\n"), 0644)
+	require.NoError(t, err)
+
+	t.Run("creates test file successfully", func(t *testing.T) {
+		err := doTest("MyHandler")
+		require.NoError(t, err)
+
+		// Check if test file was created
+		testFile := "handlers/myhandler_test.go"
+		assert.FileExists(t, testFile)
+
+		// Verify content
+		content, err := os.ReadFile(testFile)
+		require.NoError(t, err)
+		
+		contentStr := string(content)
+		assert.Contains(t, contentStr, "func TestMyHandler")
+		assert.Contains(t, contentStr, "testing")
+		assert.Contains(t, contentStr, "httptest")
+	})
+
+	t.Run("fails with empty name", func(t *testing.T) {
+		err := doTest("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must specify what to create a test for")
+	})
+}
+
 func TestStringToVariableName(t *testing.T) {
 	tests := []struct {
 		input    string
