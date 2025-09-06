@@ -1,239 +1,330 @@
 package sms
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// MockSMSProvider for testing the interface
-type MockSMSProvider struct {
-	FromNumber   string
-	SendCalled   bool
-	SendError    error
-	LastTo       string
-	LastMessage  string
-	LastUnicode  bool
-}
-
-func (m *MockSMSProvider) Send(to string, message string, unicode bool) error {
-	m.SendCalled = true
-	m.LastTo = to
-	m.LastMessage = message
-	m.LastUnicode = unicode
-	
-	if m.SendError != nil {
-		return m.SendError
-	}
-	
-	if to == "" {
-		return errors.New("phone number is required")
-	}
-	
-	if message == "" {
-		return errors.New("message is required")
-	}
-	
-	return nil
-}
-
-func TestMockSMSProvider_Send(t *testing.T) {
+func TestVonage_Send(t *testing.T) {
 	tests := []struct {
-		name        string
-		to          string
-		message     string
-		unicode     bool
-		sendError   error
-		expectError bool
+		name          string
+		mockResponse  func(req *http.Request) (*http.Response, error)
+		to            string
+		message       string
+		unicode       bool
+		expectError   bool
+		errorContains string
 	}{
 		{
-			name:        "Valid SMS",
-			to:          "+1234567890",
+			name: "Successful SMS send",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				body, _ := io.ReadAll(req.Body)
+				values, _ := url.ParseQuery(string(body))
+				
+				assert.Equal(t, "test-key", values.Get("api_key"))
+				assert.Equal(t, "test-secret", values.Get("api_secret"))
+				assert.Equal(t, "+1234567890", values.Get("from"))
+				assert.Equal(t, "+0987654321", values.Get("to"))
+				assert.Equal(t, "Test message", values.Get("text"))
+				
+				response := `{
+					"message-count": "1",
+					"messages": [{
+						"to": "+0987654321",
+						"message-id": "test-msg-id",
+						"status": "0",
+						"remaining-balance": "15.50"
+					}]
+				}`
+				
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewBufferString(response)),
+				}, nil
+			},
+			to:          "+0987654321",
 			message:     "Test message",
 			unicode:     false,
-			sendError:   nil,
 			expectError: false,
 		},
 		{
-			name:        "Valid SMS with Unicode",
-			to:          "+1234567890",
-			message:     "Test message with emoji 😀",
+			name: "Unicode SMS send",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				body, _ := io.ReadAll(req.Body)
+				values, _ := url.ParseQuery(string(body))
+				
+				assert.Equal(t, "unicode", values.Get("type"))
+				
+				response := `{
+					"message-count": "1",
+					"messages": [{"status": "0"}]
+				}`
+				
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewBufferString(response)),
+				}, nil
+			},
+			to:          "+0987654321",
+			message:     "Test message 😀",
 			unicode:     true,
-			sendError:   nil,
 			expectError: false,
 		},
 		{
-			name:        "Empty phone number",
-			to:          "",
-			message:     "Test message",
-			unicode:     false,
-			sendError:   nil,
-			expectError: true,
+			name: "Invalid credentials error",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				response := `{
+					"message-count": "1",
+					"messages": [{
+						"status": "4",
+						"error-text": "Invalid credentials"
+					}]
+				}`
+				
+				return &http.Response{
+					StatusCode: 401,
+					Body:       io.NopCloser(bytes.NewBufferString(response)),
+				}, nil
+			},
+			to:            "+0987654321",
+			message:       "Test message",
+			unicode:       false,
+			expectError:   true,
+			errorContains: "Invalid credentials",
 		},
 		{
-			name:        "Empty message",
-			to:          "+1234567890",
-			message:     "",
-			unicode:     false,
-			sendError:   nil,
-			expectError: true,
-		},
-		{
-			name:        "Provider error",
-			to:          "+1234567890",
-			message:     "Test message",
-			unicode:     false,
-			sendError:   errors.New("provider error"),
-			expectError: true,
+			name: "Network error",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				return nil, errors.New("network error")
+			},
+			to:            "+0987654321",
+			message:       "Test message",
+			unicode:       false,
+			expectError:   true,
+			errorContains: "network error",
 		},
 	}
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := &MockSMSProvider{
-				SendError: tt.sendError,
+			client := &Vonage{
+				APIKey:     "test-key",
+				APISecret:  "test-secret",
+				FromNumber: "+1234567890",
+				httpClient: newMockHTTPClient(tt.mockResponse),
 			}
 			
-			err := mock.Send(tt.to, tt.message, tt.unicode)
+			err := client.Send(tt.to, tt.message, tt.unicode)
 			
-			if !mock.SendCalled {
-				t.Error("Expected Send to be called")
-			}
-			
-			if mock.LastTo != tt.to {
-				t.Errorf("Expected to = %s, got %s", tt.to, mock.LastTo)
-			}
-			
-			if mock.LastMessage != tt.message {
-				t.Errorf("Expected message = %s, got %s", tt.message, mock.LastMessage)
-			}
-			
-			if mock.LastUnicode != tt.unicode {
-				t.Errorf("Expected unicode = %v, got %v", tt.unicode, mock.LastUnicode)
-			}
-			
-			if tt.expectError && err == nil {
-				t.Error("Expected error but got nil")
-			}
-			
-			if !tt.expectError && err != nil {
-				t.Errorf("Expected no error but got: %v", err)
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
 }
 
-func TestVonage_New(t *testing.T) {
-	// Set test environment variables
-	os.Setenv("VONAGE_API_KEY", "test-key")
-	os.Setenv("VONAGE_API_SECRET", "test-secret")
-	os.Setenv("VONAGE_FROM_NUMBER", "+1234567890")
-	defer func() {
-		os.Unsetenv("VONAGE_API_KEY")
-		os.Unsetenv("VONAGE_API_SECRET")
-		os.Unsetenv("VONAGE_FROM_NUMBER")
-	}()
-	
-	provider := CreateSMSProvider("vonage")
-	
-	vonage, ok := provider.(*Vonage)
-	if !ok {
-		t.Fatal("Expected Vonage provider")
-	}
-	
-	if vonage.APIKey != "test-key" {
-		t.Errorf("Expected APIKey = test-key, got %s", vonage.APIKey)
-	}
-	
-	if vonage.APISecret != "test-secret" {
-		t.Errorf("Expected APISecret = test-secret, got %s", vonage.APISecret)
-	}
-	
-	if vonage.FromNumber != "+1234567890" {
-		t.Errorf("Expected FromNumber = +1234567890, got %s", vonage.FromNumber)
-	}
-}
-
-func TestTwilio_New(t *testing.T) {
-	// Set test environment variables
-	os.Setenv("TWILIO_ACCOUNT_SID", "test-sid")
-	os.Setenv("TWILIO_API_KEY", "test-key")
-	os.Setenv("TWILIO_API_SECRET", "test-secret")
-	os.Setenv("TWILIO_FROM_NUMBER", "+0987654321")
-	defer func() {
-		os.Unsetenv("TWILIO_ACCOUNT_SID")
-		os.Unsetenv("TWILIO_API_KEY")
-		os.Unsetenv("TWILIO_API_SECRET")
-		os.Unsetenv("TWILIO_FROM_NUMBER")
-	}()
-	
-	provider := CreateSMSProvider("twilio")
-	
-	twilio, ok := provider.(*Twilio)
-	if !ok {
-		t.Fatal("Expected Twilio provider")
-	}
-	
-	if twilio.AccountSid != "test-sid" {
-		t.Errorf("Expected AccountSid = test-sid, got %s", twilio.AccountSid)
-	}
-	
-	if twilio.APIKey != "test-key" {
-		t.Errorf("Expected APIKey = test-key, got %s", twilio.APIKey)
-	}
-	
-	if twilio.APISecret != "test-secret" {
-		t.Errorf("Expected APISecret = test-secret, got %s", twilio.APISecret)
-	}
-	
-	if twilio.FromNumber != "+0987654321" {
-		t.Errorf("Expected FromNumber = +0987654321, got %s", twilio.FromNumber)
-	}
-}
-
-func TestCreateSMSProvider(t *testing.T) {
+func TestTwilio_Send(t *testing.T) {
 	tests := []struct {
-		name         string
-		provider     string
-		expectNil    bool
-		expectedType string
+		name          string
+		mockResponse  func(req *http.Request) (*http.Response, error)
+		to            string
+		message       string
+		unicode       bool
+		expectError   bool
+		errorContains string
 	}{
 		{
-			name:         "Vonage provider",
-			provider:     "vonage",
-			expectNil:    false,
-			expectedType: "*sms.Vonage",
+			name: "Successful SMS send",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				// Verify request
+				assert.Equal(t, "/2010-04-01/Accounts/AC123456789/Messages.json", req.URL.Path)
+				
+				// Check basic auth
+				username, password, ok := req.BasicAuth()
+				assert.True(t, ok)
+				assert.Equal(t, "test-key", username)
+				assert.Equal(t, "test-secret", password)
+				
+				// Check body
+				body, _ := io.ReadAll(req.Body)
+				values, _ := url.ParseQuery(string(body))
+				assert.Equal(t, "+0987654321", values.Get("To"))
+				assert.Equal(t, "+1234567890", values.Get("From"))
+				assert.Equal(t, "Test message", values.Get("Body"))
+				
+				response := `{
+					"sid": "SM123456789",
+					"status": "queued",
+					"to": "+0987654321",
+					"from": "+1234567890",
+					"body": "Test message"
+				}`
+				
+				return &http.Response{
+					StatusCode: 201,
+					Body:       io.NopCloser(bytes.NewBufferString(response)),
+				}, nil
+			},
+			to:          "+0987654321",
+			message:     "Test message",
+			unicode:     false,
+			expectError: false,
 		},
 		{
-			name:         "Twilio provider",
-			provider:     "twilio",
-			expectNil:    false,
-			expectedType: "*sms.Twilio",
+			name: "Authentication error",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: 401,
+					Body:       io.NopCloser(strings.NewReader("Authentication failed")),
+				}, nil
+			},
+			to:            "+0987654321",
+			message:       "Test message",
+			unicode:       false,
+			expectError:   true,
+			errorContains: "status 401",
 		},
 		{
-			name:         "Unknown provider",
-			provider:     "unknown",
-			expectNil:    true,
-			expectedType: "",
-		},
-		{
-			name:         "Empty provider",
-			provider:     "",
-			expectNil:    true,
-			expectedType: "",
+			name: "Network error",
+			mockResponse: func(req *http.Request) (*http.Response, error) {
+				return nil, errors.New("connection refused")
+			},
+			to:            "+0987654321",
+			message:       "Test message",
+			unicode:       false,
+			expectError:   true,
+			errorContains: "connection refused",
 		},
 	}
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := CreateSMSProvider(tt.provider)
-			
-			if tt.expectNil && provider != nil {
-				t.Errorf("Expected nil provider for %s", tt.provider)
+			client := &Twilio{
+				AccountSid: "AC123456789",
+				APIKey:     "test-key",
+				APISecret:  "test-secret",
+				FromNumber: "+1234567890",
+				httpClient: newMockHTTPClient(tt.mockResponse),
 			}
 			
-			if !tt.expectNil && provider == nil {
-				t.Errorf("Expected non-nil provider for %s", tt.provider)
+			err := client.Send(tt.to, tt.message, tt.unicode)
+			
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateSMSProvider(t *testing.T) {
+	tests := []struct {
+		name      string
+		provider  string
+		env       map[string]string
+		expectNil bool
+		verify    func(t *testing.T, provider SMSProvider)
+	}{
+		{
+			name:     "Vonage provider",
+			provider: "vonage",
+			env: map[string]string{
+				"VONAGE_API_KEY":     "key",
+				"VONAGE_API_SECRET":  "secret",
+				"VONAGE_FROM_NUMBER": "+123",
+			},
+			expectNil: false,
+			verify: func(t *testing.T, provider SMSProvider) {
+				v, ok := provider.(*Vonage)
+				require.True(t, ok)
+				assert.Equal(t, "key", v.APIKey)
+				assert.Equal(t, "secret", v.APISecret)
+				assert.Equal(t, "+123", v.FromNumber)
+			},
+		},
+		{
+			name:     "Twilio provider",
+			provider: "twilio",
+			env: map[string]string{
+				"TWILIO_ACCOUNT_SID": "sid",
+				"TWILIO_API_KEY":     "key",
+				"TWILIO_API_SECRET":  "secret",
+				"TWILIO_FROM_NUMBER": "+456",
+			},
+			expectNil: false,
+			verify: func(t *testing.T, provider SMSProvider) {
+				tw, ok := provider.(*Twilio)
+				require.True(t, ok)
+				assert.Equal(t, "sid", tw.AccountSid)
+				assert.Equal(t, "key", tw.APIKey)
+				assert.Equal(t, "secret", tw.APISecret)
+				assert.Equal(t, "+456", tw.FromNumber)
+			},
+		},
+		{
+			name:      "Unknown provider",
+			provider:  "unknown",
+			expectNil: true,
+		},
+		{
+			name:      "Empty provider",
+			provider:  "",
+			expectNil: true,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save and restore environment
+			if tt.env != nil {
+				oldEnv := make(map[string]string)
+				for k := range tt.env {
+					oldEnv[k] = os.Getenv(k)
+				}
+				defer func() {
+					for k, v := range oldEnv {
+						if v == "" {
+							os.Unsetenv(k)
+						} else {
+							os.Setenv(k, v)
+						}
+					}
+				}()
+				
+				// Set test environment
+				for k, v := range tt.env {
+					os.Setenv(k, v)
+				}
+			}
+			
+			provider := CreateSMSProvider(tt.provider)
+			
+			if tt.expectNil {
+				assert.Nil(t, provider)
+			} else {
+				require.NotNil(t, provider)
+				if tt.verify != nil {
+					tt.verify(t, provider)
+				}
 			}
 		})
 	}
@@ -243,22 +334,113 @@ func TestSMSProviderInterface(t *testing.T) {
 	// Ensure both Vonage and Twilio implement SMSProvider
 	var _ SMSProvider = (*Vonage)(nil)
 	var _ SMSProvider = (*Twilio)(nil)
-	var _ SMSProvider = (*MockSMSProvider)(nil)
+}
+
+func TestMockHTTPClient(t *testing.T) {
+	t.Run("Custom response", func(t *testing.T) {
+		client := newMockHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 418,
+				Body:       io.NopCloser(strings.NewReader("I'm a teapot")),
+			}, nil
+		})
+		
+		req, _ := http.NewRequest("GET", "http://example.com", nil)
+		resp, err := client.Do(req)
+		
+		assert.NoError(t, err)
+		assert.Equal(t, 418, resp.StatusCode)
+		
+		body, _ := io.ReadAll(resp.Body)
+		assert.Equal(t, "I'm a teapot", string(body))
+	})
+	
+	t.Run("Default response", func(t *testing.T) {
+		client := newMockHTTPClient(nil)
+		
+		req, _ := http.NewRequest("GET", "http://example.com", nil)
+		resp, err := client.Do(req)
+		
+		assert.NoError(t, err)
+		assert.Equal(t, 200, resp.StatusCode)
+		
+		body, _ := io.ReadAll(resp.Body)
+		assert.Equal(t, `{"status":"success"}`, string(body))
+	})
+}
+
+func TestVonage_ProductionPath(t *testing.T) {
+	// Test that production path is used when httpClient is nil
+	v := &Vonage{
+		APIKey:     "test",
+		APISecret:  "test",
+		FromNumber: "+123",
+		httpClient: nil,
+	}
+	
+	// This will use the production SDK path which will fail with test credentials
+	// We're just testing that it attempts to use the SDK
+	err := v.Send("+456", "test", false)
+	assert.Error(t, err) // Expected to fail with test credentials
+}
+
+func TestTwilio_ProductionPath(t *testing.T) {
+	// Test that production path is used when httpClient is nil
+	tw := &Twilio{
+		AccountSid: "AC123",
+		APIKey:     "test",
+		APISecret:  "test",
+		FromNumber: "+123",
+		httpClient: nil,
+	}
+	
+	// This will use the production SDK path which will fail with test credentials
+	// We're just testing that it attempts to use the SDK
+	err := tw.Send("+456", "test", false)
+	assert.Error(t, err) // Expected to fail with test credentials
 }
 
 // Benchmark tests
-func BenchmarkMockSMSProvider_Send(b *testing.B) {
-	mock := &MockSMSProvider{}
-	to := "+1234567890"
-	message := "Test message"
+func BenchmarkVonage_Send(b *testing.B) {
+	client := &Vonage{
+		APIKey:     "test",
+		APISecret:  "test",
+		FromNumber: "+123",
+		httpClient: newMockHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader(`{"messages":[{"status":"0"}]}`)),
+			}, nil
+		}),
+	}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = mock.Send(to, message, false)
+		_ = client.Send("+123", "test", false)
 	}
 }
 
-func BenchmarkCreateSMSProvider_Vonage(b *testing.B) {
+func BenchmarkTwilio_Send(b *testing.B) {
+	client := &Twilio{
+		AccountSid: "sid",
+		APIKey:     "test",
+		APISecret:  "test",
+		FromNumber: "+123",
+		httpClient: newMockHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 201,
+				Body:       io.NopCloser(strings.NewReader(`{"sid":"SM123","status":"queued"}`)),
+			}, nil
+		}),
+	}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = client.Send("+123", "test", false)
+	}
+}
+
+func BenchmarkCreateSMSProvider(b *testing.B) {
 	os.Setenv("VONAGE_API_KEY", "test")
 	os.Setenv("VONAGE_API_SECRET", "test")
 	os.Setenv("VONAGE_FROM_NUMBER", "test")
@@ -271,23 +453,5 @@ func BenchmarkCreateSMSProvider_Vonage(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = CreateSMSProvider("vonage")
-	}
-}
-
-func BenchmarkCreateSMSProvider_Twilio(b *testing.B) {
-	os.Setenv("TWILIO_ACCOUNT_SID", "test")
-	os.Setenv("TWILIO_API_KEY", "test")
-	os.Setenv("TWILIO_API_SECRET", "test")
-	os.Setenv("TWILIO_FROM_NUMBER", "test")
-	defer func() {
-		os.Unsetenv("TWILIO_ACCOUNT_SID")
-		os.Unsetenv("TWILIO_API_KEY")
-		os.Unsetenv("TWILIO_API_SECRET")
-		os.Unsetenv("TWILIO_FROM_NUMBER")
-	}()
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = CreateSMSProvider("twilio")
 	}
 }
