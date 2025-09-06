@@ -20,25 +20,25 @@ func doMake(arg2, arg3 string) error {
 		handleKey()
 
 	case "auth":
-		handleAuth()
+		return doAuth()
 
 	case "mail":
-		handleMail(arg3)
+		return doMail(arg3)
 
 	case "handler":
-		handleHandler(arg3)
+		return doHandler(arg3)
 
 	case "migration":
-		handleMigration(arg3)
+		return doMigration(arg3)
 
 	case "model":
-		handleModel(arg3)
+		return doModel(arg3)
 
 	case "session":
-		handleSession()
+		return doSession()
 
 	default:
-		exitGracefully(errors.New("Unknown subcommand" + arg3))
+		return errors.New("Unknown subcommand " + arg2)
 	}
 
 	return nil
@@ -68,18 +68,25 @@ func handleMail(name string) {
 }
 
 func handleHandler(name string) {
+	err := doHandler(name)
+	if err != nil {
+		exitGracefully(err)
+	}
+}
+
+func doHandler(name string) error {
 	if name == "" {
-		exitGracefully(errors.New("you must give the handler a name"))
+		return errors.New("you must give the handler a name")
 	}
 
 	fileName := gem.RootPath + "/handlers/" + strings.ToLower(name) + ".go"
 	if fileExists(fileName) {
-		exitGracefully(errors.New(fileName + " already exists."))
+		return errors.New(fileName + " already exists.")
 	}
 
 	data, err := templateFS.ReadFile("templates/handlers/handler.go.txt")
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
 	handler := string(data)
@@ -87,18 +94,27 @@ func handleHandler(name string) {
 
 	err = os.WriteFile(fileName, []byte(handler), 0644)
 	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+func handleMigration(name string) {
+	err := doMigration(name)
+	if err != nil {
 		exitGracefully(err)
 	}
 }
 
-func handleMigration(name string) {
+func doMigration(name string) error {
 	if name == "" {
-		exitGracefully(errors.New("migration name is required"))
+		return errors.New("migration name is required")
 	}
 
 	// check if there is a database connection
 	if gem.DB.DataType == "" {
-		panic("you have to define a database type to create migrations")
+		return errors.New("you have to define a database type to create migrations")
 	}
 
 	dbType := gem.DB.DataType
@@ -109,40 +125,58 @@ func handleMigration(name string) {
 
 	err := copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", migrationUpFile)
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
 	err = copyFileFromTemplate("templates/migrations/migration."+dbType+".down.sql", migrationDownFile)
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
-	reformatMigration(migrationUpFile, name)
-	reformatMigration(migrationDownFile, name)
+	err = reformatMigration(migrationUpFile, name)
+	if err != nil {
+		return err
+	}
+	
+	err = reformatMigration(migrationDownFile, name)
+	if err != nil {
+		return err
+	}
+	
+	return nil
 }
 
-func reformatMigration(migrationFile string, tableName string) {
+func reformatMigration(migrationFile string, tableName string) error {
 	content, err := os.ReadFile(migrationFile)
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
 	if bytes.Contains(content, []byte("TABLENAME")) {
 		content = bytes.ReplaceAll(content, []byte("TABLENAME"), []byte(tableName))
 		if err = os.WriteFile(migrationFile, content, 0644); err != nil {
-			exitGracefully(err)
+			return err
 		}
 	}
+	
+	return nil
 }
 
 func handleModel(name string) {
+	err := doModel(name)
+	if err != nil {
+		exitGracefully(err)
+	}
+}
+
+func doModel(name string) error {
 	if name == "" {
-		exitGracefully(errors.New("model name is required"))
+		return errors.New("model name is required")
 	}
 
 	data, err := templateFS.ReadFile("templates/data/model.go.txt")
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
 	model := string(data)
@@ -159,7 +193,7 @@ func handleModel(name string) {
 
 	fileName := gem.RootPath + "/data/" + strings.ToLower(modelName) + ".go"
 	if fileExists(fileName) {
-		exitGracefully(errors.New(fileName + " already exists."))
+		return errors.New(fileName + " already exists.")
 	}
 
 	modelCamelName := strcase.ToCamel(name)
@@ -169,7 +203,7 @@ func handleModel(name string) {
 
 	err = copyDataToFile([]byte(model), fileName)
 	if err != nil {
-		exitGracefully(err)
+		return err
 	}
 
 	color.Green(modelCamelName+" created: %s", fileName)
@@ -185,38 +219,47 @@ func handleModel(name string) {
 
 		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", migrationUpFile)
 		if err != nil {
-			exitGracefully(err)
+			return err
 		}
 
 		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".down.sql", migrationDownFile)
 		if err != nil {
-			exitGracefully(err)
+			return err
 		}
 
-		reformatMigration(migrationUpFile, tableName)
-		reformatMigration(migrationDownFile, tableName)
+		err = reformatMigration(migrationUpFile, tableName)
+		if err != nil {
+			return err
+		}
+		
+		err = reformatMigration(migrationDownFile, tableName)
+		if err != nil {
+			return err
+		}
 
 		color.Green("Migrations for model %s created: %s", modelCamelName, migrationFileName)
 
 		// add model to models.go
 		modelsContent, err := os.ReadFile(gem.RootPath + "/data/models.go")
 		if err != nil {
-			exitGracefully(err)
+			return err
 		}
 
 		// replace stubfile with the new model
 		if bytes.Contains(modelsContent, []byte(modelCamelName)) {
-			exitGracefully(errors.New(modelCamelName + " already exists in models.go"))
+			return errors.New(modelCamelName + " already exists in models.go")
 		} else {
 			modelsContent = bytes.Replace(modelsContent, []byte("type Models struct {"), []byte("type Models struct {\n\t"+modelCamelNamePlural+" "+modelCamelName+"\n"), 1)
 			modelsContent = bytes.Replace(modelsContent, []byte("return Models{"), []byte("return Models{\n\t\t"+modelCamelNamePlural+": "+modelCamelName+"{},\n"), 1)
 			if err = os.WriteFile(gem.RootPath+"/data/models.go", modelsContent, 0644); err != nil {
-				exitGracefully(err)
+				return err
 			}
 
 			color.Green(modelCamelName + " added to models.go")
 		}
 	}
+	
+	return nil
 }
 
 func handleSession() {
