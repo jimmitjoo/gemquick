@@ -4,22 +4,31 @@ import (
 	"context"
 	"errors"
 	"github.com/jimmitjoo/gemquick/filesystems"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/minio/minio-go/v7"
 )
 
+// getEnvOrDefault returns environment variable value or default if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // MockMinioClient is a mock implementation of the MinioClientInterface
 type MockMinioClient struct{}
 
 var mockMinio = &Minio{
-	Endpoint:  "localhost:9000",
-	AccessKey: "minioadmin",
-	SecretKey: "minioadmin",
+	Endpoint:  getEnvOrDefault("MINIO_ENDPOINT", "localhost:9000"),
+	AccessKey: getEnvOrDefault("MINIO_ACCESS_KEY", "minioadmin"),
+	SecretKey: getEnvOrDefault("MINIO_SECRET_KEY", "minioadmin"),
 	UseSSL:    false,
-	Region:    "us-east-1",
-	Bucket:    "testbucket",
+	Region:    getEnvOrDefault("MINIO_REGION", "us-east-1"),
+	Bucket:    getEnvOrDefault("MINIO_BUCKET", "testbucket"),
 	Client:    &MockMinioClient{},
 }
 
@@ -78,12 +87,12 @@ func TestMinio_Put(t *testing.T) {
 
 func TestMinio_List(t *testing.T) {
 	m := &Minio{
-		Endpoint:  "localhost:9000",
-		AccessKey: "minioadmin",
-		SecretKey: "minioadmin",
+		Endpoint:  getEnvOrDefault("MINIO_ENDPOINT", "localhost:9000"),
+		AccessKey: getEnvOrDefault("MINIO_ACCESS_KEY", "minioadmin"),
+		SecretKey: getEnvOrDefault("MINIO_SECRET_KEY", "minioadmin"),
 		UseSSL:    false,
-		Region:    "us-east-1",
-		Bucket:    "testbucket",
+		Region:    getEnvOrDefault("MINIO_REGION", "us-east-1"),
+		Bucket:    getEnvOrDefault("MINIO_BUCKET", "testbucket"),
 		Client:    &MockMinioClient{},
 	}
 
