@@ -212,31 +212,31 @@ func TestIPKeyFunc(t *testing.T) {
 			wantIP:     "192.168.1.1",
 		},
 		{
-			name:       "from X-Real-IP",
+			name:       "ignores X-Real-IP without trusted proxies",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Real-IP": "203.0.113.1"},
-			wantIP:     "203.0.113.1",
+			wantIP:     "10.0.0.1", // Should ignore headers for security
 		},
 		{
-			name:       "from X-Forwarded-For single",
+			name:       "ignores X-Forwarded-For without trusted proxies",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Forwarded-For": "203.0.113.2"},
-			wantIP:     "203.0.113.2",
+			wantIP:     "10.0.0.1", // Should ignore headers for security
 		},
 		{
-			name:       "from X-Forwarded-For multiple",
+			name:       "ignores multiple headers without trusted proxies",
 			remoteAddr: "10.0.0.1:1234",
 			headers:    map[string]string{"X-Forwarded-For": "203.0.113.3, 10.0.0.2, 10.0.0.3"},
-			wantIP:     "203.0.113.3",
+			wantIP:     "10.0.0.1", // Should ignore headers for security
 		},
 		{
-			name:       "X-Real-IP takes precedence",
+			name:       "ignores all headers without trusted proxies",
 			remoteAddr: "10.0.0.1:1234",
 			headers: map[string]string{
 				"X-Real-IP":       "203.0.113.4",
 				"X-Forwarded-For": "203.0.113.5",
 			},
-			wantIP: "203.0.113.4",
+			wantIP: "10.0.0.1", // Should ignore headers for security
 		},
 	}
 
@@ -251,6 +251,71 @@ func TestIPKeyFunc(t *testing.T) {
 			ip := IPKeyFunc(r)
 			if ip != tt.wantIP {
 				t.Errorf("IPKeyFunc() = %v, want %v", ip, tt.wantIP)
+			}
+		})
+	}
+}
+
+func TestTrustedProxyIPKeyFunc(t *testing.T) {
+	tests := []struct {
+		name           string
+		remoteAddr     string
+		headers        map[string]string
+		trustedProxies []string
+		wantIP         string
+	}{
+		{
+			name:           "from trusted proxy with X-Real-IP",
+			remoteAddr:     "10.0.0.1:1234",
+			headers:        map[string]string{"X-Real-IP": "203.0.113.1"},
+			trustedProxies: []string{"10.0.0.1"},
+			wantIP:         "203.0.113.1",
+		},
+		{
+			name:           "from trusted proxy with X-Forwarded-For single",
+			remoteAddr:     "10.0.0.1:1234", 
+			headers:        map[string]string{"X-Forwarded-For": "203.0.113.2"},
+			trustedProxies: []string{"10.0.0.1"},
+			wantIP:         "203.0.113.2",
+		},
+		{
+			name:           "from trusted proxy with X-Forwarded-For multiple",
+			remoteAddr:     "10.0.0.1:1234",
+			headers:        map[string]string{"X-Forwarded-For": "203.0.113.3, 10.0.0.2, 10.0.0.3"},
+			trustedProxies: []string{"10.0.0.1"},
+			wantIP:         "203.0.113.3",
+		},
+		{
+			name:           "from untrusted proxy ignores headers",
+			remoteAddr:     "10.0.0.1:1234",
+			headers:        map[string]string{"X-Real-IP": "203.0.113.4"},
+			trustedProxies: []string{"10.0.0.2"}, // Different IP
+			wantIP:         "10.0.0.1",
+		},
+		{
+			name:           "X-Real-IP takes precedence over X-Forwarded-For",
+			remoteAddr:     "10.0.0.1:1234",
+			headers:        map[string]string{
+				"X-Real-IP":       "203.0.113.5",
+				"X-Forwarded-For": "203.0.113.6",
+			},
+			trustedProxies: []string{"10.0.0.1"},
+			wantIP:         "203.0.113.5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/", nil)
+			r.RemoteAddr = tt.remoteAddr
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+
+			keyFunc := TrustedProxyIPKeyFunc(tt.trustedProxies)
+			ip := keyFunc(r)
+			if ip != tt.wantIP {
+				t.Errorf("TrustedProxyIPKeyFunc() = %v, want %v", ip, tt.wantIP)
 			}
 		})
 	}

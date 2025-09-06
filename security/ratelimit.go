@@ -3,6 +3,7 @@ package security
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -280,28 +281,63 @@ func AdaptiveRateLimitMiddleware(config RateLimitConfig) func(next http.Handler)
 	}
 }
 
-// getClientIP extracts client IP from request
+// getClientIP extracts client IP from request (secure version)
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (may contain multiple IPs)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP from the list
-		if idx := len(xff); idx > 0 {
-			for i, char := range xff {
-				if char == ',' || char == ' ' {
-					return xff[:i]
-				}
-			}
-			return xff
+	// For security, only use RemoteAddr unless trusted proxies are configured
+	// This prevents IP spoofing attacks via headers
+	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
+		return r.RemoteAddr[:idx]
+	}
+	return r.RemoteAddr
+}
+
+// getClientIPWithTrustedProxies extracts client IP with proxy validation
+func getClientIPWithTrustedProxies(r *http.Request, trustedProxies []string) string {
+	// If no trusted proxies defined, only use RemoteAddr for security
+	if len(trustedProxies) == 0 {
+		return getClientIP(r)
+	}
+	
+	// Check if immediate connection is from trusted proxy
+	immediateIP := getClientIP(r)
+	trusted := false
+	for _, proxy := range trustedProxies {
+		if immediateIP == proxy {
+			trusted = true
+			break
 		}
 	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+	
+	if !trusted {
+		return immediateIP
 	}
+	
+	// Only trust headers if from verified proxy
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if idx := strings.Index(xff, ","); idx != -1 {
+			ip := strings.TrimSpace(xff[:idx])
+			if ip != "" && !isPrivateIP(ip) {
+				return ip
+			}
+		} else if xff != "" && !isPrivateIP(xff) {
+			return strings.TrimSpace(xff)
+		}
+	}
+	
+	if xri := r.Header.Get("X-Real-IP"); xri != "" && !isPrivateIP(xri) {
+		return strings.TrimSpace(xri)
+	}
+	
+	return immediateIP
+}
 
-	// Fallback to RemoteAddr
-	return r.RemoteAddr
+// isPrivateIP checks if IP is in private ranges (basic check)
+func isPrivateIP(ip string) bool {
+	return strings.HasPrefix(ip, "127.") ||
+		strings.HasPrefix(ip, "10.") ||
+		strings.HasPrefix(ip, "192.168.") ||
+		strings.HasPrefix(ip, "172.16.") ||
+		ip == "localhost"
 }
 
 // APIRateLimitMiddleware provides stricter rate limiting for API endpoints
