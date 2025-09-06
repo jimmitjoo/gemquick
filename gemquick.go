@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jimmitjoo/gemquick/filesystems/miniofilesystem"
 	"github.com/jimmitjoo/gemquick/filesystems/s3filesystem"
+	"github.com/jimmitjoo/gemquick/jobs"
 	"github.com/jimmitjoo/gemquick/logging"
 	"github.com/jimmitjoo/gemquick/sms"
 	"log"
@@ -54,6 +55,7 @@ type Gemquick struct {
 	EncryptionKey   string
 	Cache           cache.Cache
 	Scheduler       *cron.Cron
+	JobManager      *jobs.JobManager
 	SMSProvider     sms.SMSProvider
 	Mail            email.Mail
 	Server          Server
@@ -123,6 +125,26 @@ func (g *Gemquick) New(rootPath string) error {
 
 	scheduler := cron.New()
 	g.Scheduler = scheduler
+
+	// initialize job manager
+	jobConfig := jobs.DefaultManagerConfig()
+	if os.Getenv("JOB_WORKERS") != "" {
+		if workers, err := strconv.Atoi(os.Getenv("JOB_WORKERS")); err == nil {
+			jobConfig.DefaultWorkers = workers
+		}
+	}
+	if os.Getenv("JOB_ENABLE_PERSISTENCE") == "true" {
+		jobConfig.EnablePersistence = true
+	}
+	g.JobManager = jobs.NewJobManager(jobConfig)
+
+	// setup job persistence if database is available and persistence is enabled
+	if jobConfig.EnablePersistence && g.DB.Pool != nil {
+		err := g.JobManager.SetPersistence(g.DB.Pool)
+		if err != nil {
+			return err
+		}
+	}
 
 	// connect to redis
 	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
@@ -290,6 +312,30 @@ func (g *Gemquick) ListenAndServe() {
 			}
 		}(badgerConn)
 	}
+
+	// start job manager
+	if err := g.JobManager.Start(); err != nil {
+		if g.Logger != nil {
+			g.Logger.Error("Failed to start job manager", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			g.ErrorLog.Printf("Failed to start job manager: %v", err)
+		}
+	}
+
+	// ensure job manager is stopped when server shuts down
+	defer func() {
+		if err := g.JobManager.Stop(); err != nil {
+			if g.Logger != nil {
+				g.Logger.Error("Failed to stop job manager", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
+				g.ErrorLog.Printf("Failed to stop job manager: %v", err)
+			}
+		}
+	}()
 
 	// Log server startup with structured logging
 	if g.Logger != nil {
