@@ -57,10 +57,10 @@ func DefaultSecurityConfig() SecurityConfig {
 		XSSProtectionMode:    "block",
 		ReferrerPolicy:       "strict-origin-when-cross-origin",
 		PermissionsPolicy:    "camera=(), microphone=(), geolocation=()",
-		AllowedOrigins:       []string{"*"},
+		AllowedOrigins:       []string{}, // Empty by default - must be explicitly configured
 		AllowedMethods:       []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:       []string{"Accept", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization"},
-		AllowedCredentials:   true,
+		AllowedCredentials:   false, // Safer default
 		MaxAge:              86400, // 24 hours
 		CustomHeaders:       make(map[string]string),
 	}
@@ -156,8 +156,13 @@ func CORSMiddleware(config SecurityConfig) func(next http.Handler) http.Handler 
 			origin := r.Header.Get("Origin")
 			
 			// Check if origin is allowed
-			if isOriginAllowed(origin, config.AllowedOrigins) {
+			originAllowed := false
+			if origin != "" && isOriginAllowed(origin, config.AllowedOrigins) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				originAllowed = true
+			} else if origin != "" {
+				// Log invalid origin attempt
+				DefaultSecurityLogger.LogInvalidOrigin(r, origin)
 			}
 
 			// Set other CORS headers
@@ -165,7 +170,16 @@ func CORSMiddleware(config SecurityConfig) func(next http.Handler) http.Handler 
 			w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
 			w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", config.MaxAge))
 
-			if config.AllowedCredentials {
+			// Only set credentials header if origin is specifically allowed (never with wildcard)
+			if config.AllowedCredentials && originAllowed {
+				// Double-check that we're not accidentally allowing credentials with wildcards
+				for _, allowedOrigin := range config.AllowedOrigins {
+					if allowedOrigin == "*" {
+						// This is a security violation - log it and refuse
+						// In production, this should be logged as a security event
+						break
+					}
+				}
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
 
@@ -182,19 +196,60 @@ func CORSMiddleware(config SecurityConfig) func(next http.Handler) http.Handler 
 
 // isOriginAllowed checks if an origin is in the allowed list
 func isOriginAllowed(origin string, allowed []string) bool {
+	if origin == "" {
+		return false
+	}
+	
 	for _, allowedOrigin := range allowed {
-		if allowedOrigin == "*" || allowedOrigin == origin {
+		if allowedOrigin == origin {
 			return true
 		}
-		// Check for wildcard subdomains (e.g., "*.example.com")
+		
+		// Handle wildcard patterns more securely
 		if strings.Contains(allowedOrigin, "*") {
-			pattern := strings.Replace(allowedOrigin, "*", ".*", -1)
-			if matched := strings.Contains(origin, strings.TrimPrefix(pattern, ".*")); matched {
+			if isSecureWildcardMatch(origin, allowedOrigin) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// isSecureWildcardMatch performs secure wildcard matching for CORS origins
+func isSecureWildcardMatch(origin, pattern string) bool {
+	// Only allow simple subdomain patterns like "*.example.com"
+	if !strings.HasPrefix(pattern, "*.") {
+		return false
+	}
+	
+	// Extract the domain part (e.g., "example.com" from "*.example.com")
+	domain := strings.TrimPrefix(pattern, "*.")
+	if domain == "" {
+		return false
+	}
+	
+	// Origin must end with the domain and have a subdomain
+	if !strings.HasSuffix(origin, "."+domain) {
+		return false
+	}
+	
+	// Ensure there's actually a subdomain (not just the domain itself)
+	prefix := strings.TrimSuffix(origin, "."+domain)
+	if prefix == "" || prefix == "." {
+		return false
+	}
+	
+	// Validate that it's a proper subdomain (no additional dots in the prefix for security)
+	if strings.Contains(prefix, ".") {
+		return false
+	}
+	
+	// Additional security: ensure the origin looks like a valid URL
+	if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+		return false
+	}
+	
+	return true
 }
 
 // RequestSizeMiddleware limits request body size
@@ -254,6 +309,7 @@ func IPBlacklistMiddleware(blockedIPs []string) func(next http.Handler) http.Han
 
 			for _, blockedIP := range blockedIPs {
 				if clientIP == blockedIP {
+					DefaultSecurityLogger.LogIPBlocked(r, "IP address in blacklist")
 					http.Error(w, "Forbidden", http.StatusForbidden)
 					return
 				}

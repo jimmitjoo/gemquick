@@ -163,7 +163,7 @@ func TestOriginMatching(t *testing.T) {
 		expected bool
 	}{
 		{"https://example.com", []string{"https://example.com"}, true},
-		{"https://example.com", []string{"*"}, true},
+		{"https://example.com", []string{"*"}, false}, // Wildcard "*" no longer supported for security
 		{"https://sub.example.com", []string{"*.example.com"}, true},
 		{"https://example.com", []string{"https://other.com"}, false},
 		{"https://malicious.com", []string{"https://example.com"}, false},
