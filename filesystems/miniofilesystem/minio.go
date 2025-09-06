@@ -37,9 +37,8 @@ func (m *Minio) getCredentials() MinioClientInterface {
 		Secure: m.UseSSL,
 	})
 	if err != nil {
-		log.Println(err)
-	} else {
-		log.Println("Connected to Minio at", m.Endpoint)
+		// Log connection error without sensitive details
+		log.Println("Failed to connect to MinIO storage")
 	}
 
 	return client
@@ -52,10 +51,10 @@ func (m *Minio) Put(fileName, folder string) error {
 
 	objectName := path.Base(fileName)
 	client := m.getCredentials()
-	uploadInfo, err := client.FPutObject(ctx, m.Bucket, path.Join(folder, objectName), fileName, minio.PutObjectOptions{})
+	_, err := client.FPutObject(ctx, m.Bucket, path.Join(folder, objectName), fileName, minio.PutObjectOptions{})
 	if err != nil {
-		log.Println("Failed to upload", fileName, "to", m.Bucket, ":", err)
-		log.Println("Upload info:", uploadInfo)
+		// Log error without exposing bucket name or internal details
+		log.Printf("Failed to upload file: %s", fileName)
 		return err
 	}
 
@@ -111,7 +110,8 @@ func (m *Minio) Delete(items []string) bool {
 			GovernanceBypass: true,
 		})
 		if err != nil {
-			log.Println("Failed to remove", item, "from", m.Bucket, ":", err)
+			// Log error without exposing bucket details
+			log.Printf("Failed to remove file: %s", item)
 			return false
 		}
 	}
@@ -128,7 +128,8 @@ func (m *Minio) Get(destination string, items ...string) error {
 		objectName := path.Base(item)
 		err := client.FGetObject(ctx, m.Bucket, item, path.Join(destination, objectName), minio.GetObjectOptions{})
 		if err != nil {
-			log.Println("Failed to download", item, "from", m.Bucket, ":", err)
+			// Log error without exposing bucket details
+			log.Printf("Failed to download file: %s", item)
 			return err
 		}
 	}
