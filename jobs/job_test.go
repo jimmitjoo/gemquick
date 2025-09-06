@@ -184,7 +184,13 @@ func TestJobSerialization(t *testing.T) {
 	assert.Equal(t, job.Type, newJob.Type)
 	assert.Equal(t, job.Queue, newJob.Queue)
 	assert.Equal(t, job.Priority, newJob.Priority)
-	assert.Equal(t, job.Payload, newJob.Payload)
+	
+	// Handle JSON unmarshaling converting int to float64
+	expectedPayload := map[string]interface{}{
+		"message": "test",
+		"count":   float64(42), // JSON unmarshaling converts numbers to float64
+	}
+	assert.Equal(t, expectedPayload, newJob.Payload)
 	assert.Equal(t, job.Metadata, newJob.Metadata)
 }
 
