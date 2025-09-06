@@ -23,6 +23,7 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/gomodule/redigo v1.8.9
+	github.com/gorilla/websocket v1.5.3
 	github.com/iancoleman/strcase v0.2.0
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.2
@@ -31,7 +32,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.72
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/twilio/twilio-go v1.22.0
 	github.com/vanng822/go-premailer v1.20.1
 	github.com/vonage/vonage-go-sdk v0.14.0
