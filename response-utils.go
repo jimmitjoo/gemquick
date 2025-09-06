@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
 func (g *Gemquick) ReadJson(w http.ResponseWriter, r *http.Request, data interface{}) error {
@@ -59,11 +60,40 @@ func (g *Gemquick) WriteXML(w http.ResponseWriter, status int, data interface{},
 }
 
 func (g *Gemquick) DownloadFile(w http.ResponseWriter, r *http.Request, pathToFile, filename string) error {
-	fp := path.Join(pathToFile, filename)
+	// Validate that filename doesn't contain path traversal attempts
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
+		return errors.New("invalid filename")
+	}
+	
+	// Clean and validate the base path
+	cleanPath := filepath.Clean(pathToFile)
+	
+	// Ensure the path is absolute
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return err
+	}
+	
+	// Join with filename and clean again
+	fp := filepath.Join(absPath, filename)
 	fileToServe := filepath.Clean(fp)
+	
+	// Verify the final path is still within the intended directory
+	if !strings.HasPrefix(fileToServe, absPath) {
+		return errors.New("invalid file path")
+	}
+	
+	// Check if file exists and is not a directory
+	fileInfo, err := os.Stat(fileToServe)
+	if err != nil {
+		return err
+	}
+	if fileInfo.IsDir() {
+		return errors.New("cannot download directory")
+	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	w.Header().Set("Content-Type", fmt.Sprintf("attachment; file=%s", filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(fileToServe)))
+	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeFile(w, r, fileToServe)
 
 	return nil
