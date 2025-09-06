@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"os"
 )
 
@@ -14,11 +15,22 @@ const (
 
 func (g Gemquick) RandomString(length int) string {
 	s, r := make([]rune, length), []rune(randomString)
-
+	
 	for i := range s {
-		p, _ := rand.Prime(rand.Reader, len(r))
-		x, y := p.Uint64(), uint64(len(r))
-		s[i] = r[x%y]
+		// Use crypto/rand for secure random number generation
+		b := make([]byte, 1)
+		for {
+			_, err := rand.Read(b)
+			if err != nil {
+				// In case of error, try again
+				continue
+			}
+			// Use modulo only if within valid range to avoid bias
+			if int(b[0]) < 256-(256%len(r)) {
+				s[i] = r[int(b[0])%len(r)]
+				break
+			}
+		}
 	}
 
 	return string(s)
@@ -81,7 +93,10 @@ func (e Encryption) Encrypt(data string) (string, error) {
 
 func (e Encryption) Decrypt(cryptoText string) (string, error) {
 
-	cipherText, _ := base64.URLEncoding.DecodeString(cryptoText)
+	cipherText, err := base64.URLEncoding.DecodeString(cryptoText)
+	if err != nil {
+		return "", err
+	}
 
 	block, err := aes.NewCipher(e.Key)
 	if err != nil {
@@ -89,7 +104,7 @@ func (e Encryption) Decrypt(cryptoText string) (string, error) {
 	}
 
 	if len(cipherText) < aes.BlockSize {
-		return "", err
+		return "", errors.New("ciphertext too short")
 	}
 
 	iv := cipherText[:aes.BlockSize]
