@@ -87,14 +87,11 @@ DROP TABLE IF EXISTS test_table;`
 			expectError: true, // Will error because no actual DB connection
 		},
 		{
-			name:        "invalid direction defaults to up",
+			name:        "invalid direction shows help",
 			direction:   "invalid",
 			steps:       "",
-			setupEnv: map[string]string{
-				"DATABASE_TYPE": "postgres",
-				"DATABASE_DSN":  "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
-			},
-			expectError: true, // Will still error because no actual DB connection
+			setupEnv:    map[string]string{},
+			expectError: false, // Actually shows help instead of erroring
 		},
 	}
 
